@@ -1,0 +1,110 @@
+import { apiRequest } from "@/lib/api/client";
+import type { AdminTable, Venue, VenueMenu } from "@/lib/types";
+
+export type VenueCreateInput = {
+  name: string;
+  address: string;
+  city: string;
+  area?: string;
+  lat?: number;
+  lng?: number;
+  isActive?: boolean;
+};
+
+export async function listVenues(token: string) {
+  return apiRequest<{ ok: true; venues: Venue[] }>("/admin/venues", { token });
+}
+
+export async function createVenue(token: string, body: VenueCreateInput) {
+  return apiRequest<{ ok: true; venue: Venue }>("/admin/venues", {
+    method: "POST",
+    token,
+    body,
+  });
+}
+
+export async function patchVenue(
+  token: string,
+  venueId: string,
+  body: Partial<VenueCreateInput>,
+) {
+  return apiRequest<{ ok: true; venue: Venue }>(`/admin/venues/${venueId}`, {
+    method: "PATCH",
+    token,
+    body,
+  });
+}
+
+export async function listVenueMenus(token: string, venueId: string) {
+  return apiRequest<{ ok: true; menus: VenueMenu[] }>(
+    `/admin/venues/${venueId}/menus`,
+    { token },
+  );
+}
+
+export async function createVenueMenu(
+  token: string,
+  venueId: string,
+  body: {
+    name: string;
+    description?: string;
+    dietaryType: "VEGETARIAN" | "NON_VEGETARIAN" | "VEGAN";
+    costPerHead: number;
+  },
+) {
+  return apiRequest<{ ok: true; menu: VenueMenu }>(
+    `/admin/venues/${venueId}/menus`,
+    { method: "POST", token, body },
+  );
+}
+
+export async function listVenueTables(token: string, venueId: string) {
+  return apiRequest<{ ok: true; tables: AdminTable[] }>(
+    `/admin/venues/${venueId}/tables`,
+    { token },
+  );
+}
+
+export async function createVenueTable(
+  token: string,
+  venueId: string,
+  body: {
+    startsAt: string;
+    seatPrice: number;
+    priceTier: "DAYTIME" | "EVENING";
+    capacity?: number;
+    tableType?: "WEEKLY" | "WOMEN_LED" | "COUPLES" | "SINGLES";
+    paymentType?: "ALL_INCLUSIVE" | "PAY_OWN_BILL";
+    vibeCopy?: string;
+    inclusions?: string[];
+    menuId?: string;
+    status?: "OPEN" | "CANCELLED";
+  },
+) {
+  return apiRequest<{ ok: true; table: AdminTable }>(
+    `/admin/venues/${venueId}/tables`,
+    { method: "POST", token, body },
+  );
+}
+
+export async function patchTable(
+  token: string,
+  tableId: string,
+  body: Record<string, unknown>,
+) {
+  return apiRequest<{ ok: true; table: AdminTable }>(
+    `/admin/tables/${tableId}`,
+    { method: "PATCH", token, body },
+  );
+}
+
+export async function assignVenueStaff(
+  token: string,
+  venueId: string,
+  body: { userId: string; staffRole?: "OWNER" | "MANAGER" | "STAFF" },
+) {
+  return apiRequest<{ ok: true; staff: unknown }>(
+    `/admin/venues/${venueId}/staff`,
+    { method: "POST", token, body },
+  );
+}
