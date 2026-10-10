@@ -69,8 +69,8 @@ export type BookingStatus =
   | "PENDING_PAYMENT"
   | "CONFIRMED"
   | "CANCELLED"
-  | "COMPLETED"
-  | "REFUNDED"
+  | "ATTENDED"
+  | "NO_SHOW"
   | string;
 
 export type AdminBooking = {
@@ -78,6 +78,10 @@ export type AdminBooking = {
   status: BookingStatus;
   seatsBooked: number;
   createdAt: string;
+  amountPaid?: number | null;
+  checkInCode?: string | null;
+  bookingType?: string | null;
+  cancelReason?: string | null;
   user?: {
     id: string;
     firstName?: string | null;
@@ -93,6 +97,8 @@ export type AdminBooking = {
     status: string;
     amountInr?: number;
     amount?: number;
+    method?: string | null;
+    providerRef?: string | null;
   } | null;
 };
 
@@ -101,6 +107,10 @@ export type AdminPayment = {
   status: string;
   amountInr?: number;
   amount?: number;
+  method?: string | null;
+  provider?: string | null;
+  providerRef?: string | null;
+  bookingId?: string;
   createdAt: string;
   booking?: AdminBooking | null;
 };

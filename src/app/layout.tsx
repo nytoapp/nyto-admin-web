@@ -1,17 +1,16 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Outfit, JetBrains_Mono } from "next/font/google";
 import { AuthProvider } from "@/providers/auth-provider";
-import { AppShell } from "@/components/shell/AppShell";
 import "./globals.css";
 
-const geistSans = Geist({
+const outfit = Outfit({
   subsets: ["latin"],
-  variable: "--font-geist-sans",
+  variable: "--font-outfit",
 });
 
-const geistMono = Geist_Mono({
+const jetbrains = JetBrains_Mono({
   subsets: ["latin"],
-  variable: "--font-geist-mono",
+  variable: "--font-jetbrains",
 });
 
 export const metadata: Metadata = {
@@ -25,11 +24,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body className="font-sans antialiased">
-        <AuthProvider>
-          <AppShell>{children}</AppShell>
-        </AuthProvider>
+    <html lang="en" className={`${outfit.variable} ${jetbrains.variable}`}>
+      <body className="font-sans antialiased text-text">
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

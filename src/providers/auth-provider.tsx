@@ -25,6 +25,12 @@ import {
   getStoredUser,
   saveSession,
 } from "@/lib/auth-storage";
+import {
+  isMockAuth,
+  mockAccessCheck,
+  mockRequestOtp,
+  mockVerifyOtp,
+} from "@/lib/mock/auth";
 import type { AdminUser } from "@/lib/types";
 
 type AuthState = {
@@ -32,6 +38,7 @@ type AuthState = {
   user: AdminUser | null;
   token: string | null;
   error: string | null;
+  mockMode: boolean;
   requestOtp: (email: string) => Promise<{ maskedEmail: string }>;
   verifyOtp: (email: string, code: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -39,13 +46,11 @@ type AuthState = {
 };
 
 const AuthContext = createContext<AuthState | null>(null);
-
-const PUBLIC = new Set(["/login"]);
-/** Refresh a bit before JWT `exp` so in-flight admin calls don't race expiry. */
 const REFRESH_SKEW_MS = 60_000;
 
 function accessTokenNeedsRefresh(token: string): boolean {
   try {
+    if (token.startsWith("mock.")) return false;
     const payload = token.split(".")[1];
     if (!payload) return true;
     const json = JSON.parse(
@@ -68,8 +73,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshInFlight = useRef<Promise<string | null> | null>(null);
   const userRef = useRef<AdminUser | null>(null);
   userRef.current = user;
+  const mockMode = isMockAuth();
 
   const ensureAdmin = useCallback(async (accessToken: string, u: AdminUser) => {
+    if (mockMode || accessToken.startsWith("mock.")) {
+      await mockAccessCheck();
+      setToken(accessToken);
+      setUser({ ...u, role: "ADMIN" });
+      return;
+    }
     const check = await accessCheck(accessToken);
     if (check.role !== "ADMIN") {
       clearSession();
@@ -77,7 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     setToken(accessToken);
     setUser({ ...u, role: "ADMIN" });
-  }, []);
+  }, [mockMode]);
 
   const rotateSession = useCallback(async (): Promise<string | null> => {
     if (refreshInFlight.current) return refreshInFlight.current;
@@ -85,6 +97,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshInFlight.current = (async () => {
       const refresh = getRefreshToken();
       if (!refresh) return null;
+      if (mockMode || refresh.startsWith("mock.")) {
+        const access = getAccessToken();
+        return access;
+      }
       try {
         const rotated = await refreshSession(refresh);
         const stored = getStoredUser<AdminUser>();
@@ -106,7 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
 
     return refreshInFlight.current;
-  }, []);
+  }, [mockMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -124,19 +140,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         if (!access) {
           clearSession();
-          if (!cancelled) {
-            setUser(null);
-            setToken(null);
-          }
           return;
         }
         try {
           await ensureAdmin(access, stored);
         } catch {
           const rotated = await rotateSession();
-          if (rotated) {
-            await ensureAdmin(rotated, stored);
-          } else {
+          if (rotated) await ensureAdmin(rotated, stored);
+          else {
             clearSession();
             if (!cancelled) {
               setUser(null);
@@ -161,9 +172,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!ready) return;
-    if (!user && !PUBLIC.has(pathname)) {
-      router.replace("/login");
-    }
+    // Only bounce away from login when already authenticated.
+    // Unauthenticated console routes are gated by (console)/AppShell.
     if (user && pathname === "/login") {
       router.replace("/overview");
     }
@@ -171,44 +181,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const requestOtp = useCallback(async (email: string) => {
     setError(null);
+    if (mockMode) return mockRequestOtp(email);
     const res = await requestEmailOtp(email.trim().toLowerCase());
     return { maskedEmail: res.maskedEmail };
-  }, []);
+  }, [mockMode]);
 
   const verifyOtp = useCallback(
     async (email: string, code: string) => {
       setError(null);
-      const res = await verifyEmailOtp(email.trim().toLowerCase(), code.trim());
+      const res = mockMode
+        ? await mockVerifyOtp(email, code)
+        : await verifyEmailOtp(email.trim().toLowerCase(), code.trim());
       saveSession({
         accessToken: res.accessToken,
         refreshToken: res.refreshToken,
         user: res.user,
       });
       try {
-        await ensureAdmin(res.accessToken, res.user);
+        // Navigate first so /login never paints inside the ops shell.
         router.replace("/overview");
+        await ensureAdmin(res.accessToken, res.user);
       } catch (err) {
         clearSession();
         setUser(null);
         setToken(null);
+        router.replace("/login");
         const message =
-          err instanceof ApiError
+          err instanceof ApiError || err instanceof Error
             ? err.message
             : "Could not verify admin access.";
         setError(message);
         throw err;
       }
     },
-    [ensureAdmin, router],
+    [ensureAdmin, mockMode, router],
   );
 
   const logout = useCallback(async () => {
-    await apiLogout(getAccessToken(), getRefreshToken());
+    const access = getAccessToken();
+    const refresh = getRefreshToken();
+    if (!mockMode && refresh) {
+      try {
+        await apiLogout(access, refresh);
+      } catch {
+        /* ignore network errors on sign-out */
+      }
+    }
     clearSession();
-    setUser(null);
-    setToken(null);
-    router.replace("/login");
-  }, [router]);
+    // Do NOT setUser(null) first — that paints a "Signing out…" shell flash.
+    // Hard navigate with session already cleared; login remounts clean.
+    window.location.href = "/login";
+  }, [mockMode]);
 
   const getToken = useCallback(async () => {
     const access = getAccessToken();
@@ -222,12 +245,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       token,
       error,
+      mockMode,
       requestOtp,
       verifyOtp,
       logout,
       getToken,
     }),
-    [ready, user, token, error, requestOtp, verifyOtp, logout, getToken],
+    [ready, user, token, error, mockMode, requestOtp, verifyOtp, logout, getToken],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

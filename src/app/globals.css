@@ -1,22 +1,29 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #07090d;
-  --bg-elevated: #0c1017;
-  --bg-soft: #121821;
-  --bg-hover: #171e2a;
-  --border: #1e293b;
-  --border-subtle: #161d2a;
-  --text: #f1f5f9;
-  --text-muted: #94a3b8;
-  --text-faint: #64748b;
-  --accent: #3d6eff;
-  --accent-soft: #7aa2ff;
-  --accent-deep: #2b5ce8;
-  --danger: #f07178;
-  --success: #4ade80;
-  --warning: #fbbf24;
-  --ring: color-mix(in srgb, var(--accent) 45%, transparent);
+  /* Cool stone canvas — not cream, not purple-dark AI default */
+  --bg: #eef1f5;
+  --bg-elevated: #ffffff;
+  --bg-soft: #e6eaef;
+  --bg-hover: #dce2ea;
+  --ink: #0c1222;
+  --text: #121826;
+  --text-muted: #5b6577;
+  --text-faint: #8b95a8;
+  --border: #d5dbe6;
+  --border-subtle: #e4e8ef;
+  --accent: #155eef;
+  --accent-soft: #3b82f6;
+  --accent-deep: #1248c9;
+  --accent-wash: rgba(21, 94, 239, 0.08);
+  --danger: #e11d48;
+  --success: #059669;
+  --warning: #d97706;
+  --ring: color-mix(in srgb, var(--accent) 35%, transparent);
+  --shadow-sm: 0 1px 2px rgba(12, 18, 34, 0.04);
+  --shadow-md: 0 8px 30px -12px rgba(12, 18, 34, 0.12);
+  --shadow-lg: 0 24px 60px -28px rgba(12, 18, 34, 0.2);
+  --radius: 14px;
 }
 
 @theme inline {
@@ -24,19 +31,21 @@
   --color-bg-elevated: var(--bg-elevated);
   --color-bg-soft: var(--bg-soft);
   --color-bg-hover: var(--bg-hover);
-  --color-border: var(--border);
-  --color-border-subtle: var(--border-subtle);
+  --color-ink: var(--ink);
   --color-text: var(--text);
   --color-text-muted: var(--text-muted);
   --color-text-faint: var(--text-faint);
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
   --color-accent-deep: var(--accent-deep);
   --color-danger: var(--danger);
   --color-success: var(--success);
   --color-warning: var(--warning);
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+  --font-display: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
 }
 
 * {
@@ -50,15 +59,15 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
-  font-feature-settings: "ss01" on, "cv11" on;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
 body {
   background-image:
-    radial-gradient(1200px 600px at 10% -10%, rgba(61, 110, 255, 0.09), transparent 55%),
-    radial-gradient(900px 500px at 100% 0%, rgba(43, 92, 232, 0.06), transparent 50%);
+    radial-gradient(900px 480px at 12% -8%, rgba(21, 94, 239, 0.09), transparent 55%),
+    radial-gradient(700px 420px at 100% 0%, rgba(5, 150, 105, 0.05), transparent 50%),
+    linear-gradient(180deg, #f5f7fa 0%, var(--bg) 40%);
   background-attachment: fixed;
 }
 
@@ -76,6 +85,7 @@ textarea {
 
 ::selection {
   background: var(--ring);
+  color: var(--ink);
 }
 
 :focus-visible {
@@ -83,10 +93,10 @@ textarea {
   outline-offset: 2px;
 }
 
-@keyframes nyto-enter {
+@keyframes nyto-rise {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -94,50 +104,168 @@ textarea {
   }
 }
 
-.nyto-page {
-  animation: nyto-enter 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+@keyframes nyto-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
-/* Shared data surface */
+@keyframes nyto-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes nyto-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(28px, -18px, 0) scale(1.06);
+  }
+}
+
+@keyframes nyto-drift-slow {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(-22px, 14px, 0);
+  }
+}
+
+@keyframes nyto-pulse-dot {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.35);
+  }
+}
+
+@keyframes nyto-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes nyto-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.nyto-page {
+  animation: nyto-rise 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.nyto-fade {
+  animation: nyto-fade 500ms ease both;
+}
+
+.nyto-rise {
+  animation: nyto-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.nyto-drift {
+  animation: nyto-drift 14s ease-in-out infinite;
+}
+
+.nyto-drift-slow {
+  animation: nyto-drift-slow 18s ease-in-out infinite;
+}
+
+.nyto-float {
+  animation: nyto-float 5.5s ease-in-out infinite;
+}
+
+.nyto-step-in {
+  animation: nyto-scale-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nyto-page,
+  .nyto-fade,
+  .nyto-rise,
+  .nyto-drift,
+  .nyto-drift-slow,
+  .nyto-float,
+  .nyto-step-in {
+    animation: none !important;
+  }
+}
+
 .nyto-panel {
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.035) inset,
-    0 12px 40px -28px rgba(0, 0, 0, 0.65);
+  background: var(--bg-elevated);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.nyto-panel-lg {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  border-radius: calc(var(--radius) + 4px);
+  box-shadow: var(--shadow-md);
+}
+
+.nyto-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .nyto-table {
   width: 100%;
+  min-width: 520px;
   border-collapse: collapse;
   text-align: left;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .nyto-table thead {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: color-mix(in srgb, var(--bg-soft) 92%, transparent);
-  backdrop-filter: blur(8px);
+  background: color-mix(in srgb, var(--bg-soft) 85%, white);
   color: var(--text-faint);
 }
 
 .nyto-table th {
-  padding: 11px 14px;
+  padding: 12px 14px;
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-weight: 650;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   border-bottom: 1px solid var(--border);
+  white-space: nowrap;
 }
 
 .nyto-table td {
-  padding: 13px 14px;
+  padding: 14px;
   border-top: 1px solid var(--border-subtle);
   vertical-align: middle;
+}
+
+.nyto-table tbody tr:last-child td {
+  border-bottom: none;
 }
 
 .nyto-table tbody tr {
@@ -145,19 +273,15 @@ textarea {
 }
 
 .nyto-table tbody tr:hover {
-  background: color-mix(in srgb, var(--bg-hover) 80%, transparent);
-}
-
-.nyto-table tbody tr:last-child td {
-  border-bottom: none;
+  background: color-mix(in srgb, var(--accent-wash) 80%, transparent);
 }
 
 .nyto-press {
   transition:
-    transform 120ms ease,
-    box-shadow 120ms ease,
-    background 120ms ease,
-    border-color 120ms ease;
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    background 140ms ease,
+    border-color 140ms ease;
 }
 
 .nyto-press:active:not(:disabled) {
