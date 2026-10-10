@@ -1,0 +1,325 @@
+export const MOCK_STATS = {
+  activeVenues: 8,
+  sessions: 10,
+  confirmed: 3,
+  pendingPayment: 2,
+};
+
+export const MOCK_ATTENTION = [
+  { id: "1", label: "2 pending payments", href: "/bookings" },
+  { id: "2", label: "1 host application", href: "/host-applications" },
+];
+
+export const MOCK_BOOKINGS = [
+  {
+    id: "b1",
+    guest: "Sai Reddy",
+    phone: "+91 63020 08513",
+    venue: "SkyGarden Madhapur",
+    venueId: "1",
+    when: "5 Dec · 8:00 PM",
+    seats: 1,
+    status: "PENDING_PAYMENT",
+  },
+  {
+    id: "b2",
+    guest: "Ananya K",
+    phone: "+91 98765 11122",
+    venue: "Hitech Terrace",
+    venueId: "2",
+    when: "6 Dec · 7:30 PM",
+    seats: 2,
+    status: "CONFIRMED",
+  },
+  {
+    id: "b3",
+    guest: "Rahul M",
+    phone: "+91 90000 33445",
+    venue: "Jubilee Supper Club",
+    venueId: "3",
+    when: "7 Dec · 8:00 PM",
+    seats: 1,
+    status: "CONFIRMED",
+  },
+  {
+    id: "b4",
+    guest: "Divya S",
+    phone: "+91 98877 66554",
+    venue: "Banjara Long Table",
+    venueId: "4",
+    when: "1 Dec · 8:00 PM",
+    seats: 2,
+    status: "CANCELLED",
+  },
+];
+
+export const MOCK_PAYMENTS = [
+  {
+    id: "p1",
+    when: "4 Dec · 2:14 PM",
+    guest: "Ananya K",
+    amount: "₹2,598",
+    venue: "Hitech Terrace",
+    status: "CAPTURED",
+  },
+  {
+    id: "p2",
+    when: "3 Dec · 9:02 PM",
+    guest: "Rahul M",
+    amount: "₹1,299",
+    venue: "Jubilee Supper Club",
+    status: "CAPTURED",
+  },
+  {
+    id: "p3",
+    when: "5 Dec · 11:40 AM",
+    guest: "Sai Reddy",
+    amount: "₹1,299",
+    venue: "SkyGarden Madhapur",
+    status: "PENDING_PAYMENT",
+  },
+];
+
+export const MOCK_NETWORK_SESSIONS = [
+  {
+    id: "ns1",
+    when: "5 Dec · 8:00 PM",
+    venue: "SkyGarden Madhapur",
+    venueId: "1",
+    price: "₹1,299",
+    seats: "2 left · 6 seats",
+    status: "OPEN",
+  },
+  {
+    id: "ns2",
+    when: "6 Dec · 7:30 PM",
+    venue: "Hitech Terrace",
+    venueId: "2",
+    price: "₹999",
+    seats: "4 left · 6 seats",
+    status: "OPEN",
+  },
+  {
+    id: "ns3",
+    when: "7 Dec · 8:00 PM",
+    venue: "Jubilee Supper Club",
+    venueId: "3",
+    price: "₹1,499",
+    seats: "6 left · 6 seats",
+    status: "OPEN",
+  },
+  {
+    id: "ns4",
+    when: "28 Nov · 7:30 PM",
+    venue: "SkyGarden Madhapur",
+    venueId: "1",
+    price: "₹999",
+    seats: "0 left · 6 seats",
+    status: "FULL",
+  },
+  {
+    id: "ns5",
+    when: "20 Nov · 8:00 PM",
+    venue: "Banjara Long Table",
+    venueId: "4",
+    price: "₹1,199",
+    seats: "3 left · 6 seats",
+    status: "CANCELLED",
+  },
+];
+
+export const MOCK_HOST_APPS = [
+  {
+    id: "h1",
+    name: "Priya Nair",
+    phone: "+91 98765 43210",
+    email: "priya@gachikitchen.in",
+    venue: "Gachibowli Kitchen",
+    city: "Hyderabad",
+    status: "PENDING",
+  },
+  {
+    id: "h2",
+    name: "Arjun Patel",
+    phone: "+91 91234 55667",
+    email: "arjun@kokapet.in",
+    venue: "Kokapet Terrace",
+    city: "Hyderabad",
+    status: "APPROVED",
+  },
+  {
+    id: "h3",
+    name: "Neha Gupta",
+    phone: "+91 99887 76655",
+    email: "neha@film.nagar",
+    venue: "Film Nagar Lounge",
+    city: "Hyderabad",
+    status: "REJECTED",
+  },
+];
+
+export const MOCK_VENUES = [
+  {
+    id: "1",
+    name: "SkyGarden Madhapur",
+    area: "Madhapur",
+    city: "Hyderabad",
+    address: "Plot 12, Hitech Road",
+    tables: 3,
+    staff: 2,
+    active: true,
+  },
+  {
+    id: "2",
+    name: "Hitech Terrace",
+    area: "Hitech City",
+    city: "Hyderabad",
+    address: "Level 8, Cyber Towers",
+    tables: 2,
+    staff: 1,
+    active: true,
+  },
+  {
+    id: "3",
+    name: "Jubilee Supper Club",
+    area: "Jubilee Hills",
+    city: "Hyderabad",
+    address: "Road No. 36",
+    tables: 2,
+    staff: 1,
+    active: true,
+  },
+  {
+    id: "4",
+    name: "Banjara Long Table",
+    area: "Banjara Hills",
+    city: "Hyderabad",
+    address: "Road No. 12",
+    tables: 1,
+    staff: 0,
+    active: true,
+  },
+  {
+    id: "5",
+    name: "Secunderabad Cellar",
+    area: "Secunderabad",
+    city: "Hyderabad",
+    address: "MG Road",
+    tables: 0,
+    staff: 0,
+    active: false,
+  },
+];
+
+export const MOCK_EXPERIENCES = [
+  {
+    id: "e1",
+    name: "3-course dinner",
+    diet: "NON_VEGETARIAN",
+    cost: "₹1,299",
+  },
+  {
+    id: "e2",
+    name: "Vegetarian tasting",
+    diet: "VEGETARIAN",
+    cost: "₹999",
+  },
+];
+
+export const MOCK_VENUE_SESSIONS = [
+  {
+    id: "s1",
+    when: "5 Dec · 8:00 PM",
+    price: "₹1,299",
+    seats: "2 left · 6 seats",
+    status: "OPEN",
+    experience: "3-course dinner",
+  },
+  {
+    id: "s2",
+    when: "12 Dec · 8:00 PM",
+    price: "₹1,299",
+    seats: "6 left · 6 seats",
+    status: "OPEN",
+    experience: "3-course dinner",
+  },
+  {
+    id: "s3",
+    when: "28 Nov · 7:30 PM",
+    price: "₹999",
+    seats: "0 left · 6 seats",
+    status: "FULL",
+    experience: "Vegetarian tasting",
+  },
+];
+
+export const MOCK_VENUE_STAFF = [
+  {
+    id: "st1",
+    name: "Kiran Rao",
+    email: "kiran@skygarden.in",
+    role: "OWNER",
+  },
+  {
+    id: "st2",
+    name: "Meera Shah",
+    email: "meera@skygarden.in",
+    role: "MANAGER",
+  },
+];
+
+export const MOCK_GUESTS = [
+  {
+    id: "g1",
+    name: "Sai Reddy",
+    phone: "+91 63020 08513",
+    email: "sai@email.com",
+    bookings: 4,
+    lastVenue: "SkyGarden Madhapur",
+    status: "ACTIVE",
+  },
+  {
+    id: "g2",
+    name: "Ananya K",
+    phone: "+91 98765 11122",
+    email: "ananya@email.com",
+    bookings: 2,
+    lastVenue: "Hitech Terrace",
+    status: "ACTIVE",
+  },
+  {
+    id: "g3",
+    name: "Rahul M",
+    phone: "+91 90000 33445",
+    email: "rahul@email.com",
+    bookings: 1,
+    lastVenue: "Jubilee Supper Club",
+    status: "ACTIVE",
+  },
+  {
+    id: "g4",
+    name: "Priya Nair",
+    phone: "+91 98888 22110",
+    email: "priya@email.com",
+    bookings: 0,
+    lastVenue: "—",
+    status: "NEW",
+  },
+];
+
+export const MOCK_TEAM = [
+  {
+    id: "t1",
+    name: "NYTO Admin",
+    email: "admin@nyto.app",
+    role: "ADMIN",
+    status: "ACTIVE",
+  },
+  {
+    id: "t2",
+    name: "Ops Lead",
+    email: "ops@nyto.app",
+    role: "ADMIN",
+    status: "ACTIVE",
+  },
+];

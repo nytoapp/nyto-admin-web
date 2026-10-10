@@ -1,18 +1,18 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createVenue } from "@/lib/api/venues";
-import { ApiError } from "@/lib/api/client";
-import { useAuth } from "@/providers/auth-provider";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { FieldError, Input, Label } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/Page";
+import { ApiError } from "@/lib/api/client";
+import { createVenue } from "@/lib/api/venues";
+import { useAuth } from "@/providers/auth-provider";
 
 export default function NewVenuePage() {
   const router = useRouter();
-  const { getToken } = useAuth();
+  const { getToken, mockMode } = useAuth();
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("Hyderabad");
@@ -22,11 +22,20 @@ export default function NewVenuePage() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    setBusy(true);
+    if (!name.trim() || !address.trim() || !city.trim()) {
+      setError("Name, address, and city are required.");
+      return;
+    }
     setError(null);
+    setBusy(true);
     try {
+      if (mockMode) {
+        await new Promise((r) => setTimeout(r, 400));
+        router.push("/venues/1");
+        return;
+      }
       const token = await getToken();
-      if (!token) throw new ApiError("Not signed in", 401);
+      if (!token) throw new ApiError("Session expired. Sign in again.", 401);
       const res = await createVenue(token, {
         name: name.trim(),
         address: address.trim(),
@@ -34,10 +43,13 @@ export default function NewVenuePage() {
         area: area.trim() || undefined,
         isActive: true,
       });
-      router.replace(`/venues/${res.venue.id}`);
+      router.push(`/venues/${res.venue.id}`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not create venue.");
-    } finally {
+      setError(
+        err instanceof ApiError || err instanceof Error
+          ? err.message
+          : "Could not create venue.",
+      );
       setBusy(false);
     }
   }
@@ -46,7 +58,7 @@ export default function NewVenuePage() {
     <div>
       <PageHeader
         title="Add venue"
-        description="Create a place NYTO can host nights. Add sessions after."
+        description="Create a place NYTO can host nights."
         actions={
           <Link href="/venues">
             <Button variant="ghost">Cancel</Button>
@@ -54,8 +66,8 @@ export default function NewVenuePage() {
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,28rem)_240px]">
-        <form onSubmit={onSubmit} className="nyto-panel space-y-4 p-5">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,28rem)_260px]">
+        <form onSubmit={onSubmit} className="nyto-panel space-y-4 p-5 sm:p-6">
           <div>
             <Label>Venue name</Label>
             <Input
@@ -63,6 +75,7 @@ export default function NewVenuePage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="SkyGarden Madhapur"
+              autoFocus
             />
           </div>
           <div>
@@ -98,7 +111,7 @@ export default function NewVenuePage() {
           </Button>
         </form>
 
-        <aside className="nyto-panel h-fit p-4 text-[13px] text-text-muted">
+        <aside className="nyto-panel h-fit p-5 text-[14px] text-text-muted">
           <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-faint">
             After create
           </p>

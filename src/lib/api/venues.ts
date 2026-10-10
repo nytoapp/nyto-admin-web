@@ -15,6 +15,32 @@ export async function listVenues(token: string) {
   return apiRequest<{ ok: true; venues: Venue[] }>("/admin/venues", { token });
 }
 
+export async function getVenue(token: string, venueId: string) {
+  return apiRequest<{ ok: true; venue: Venue }>(`/admin/venues/${venueId}`, {
+    token,
+  });
+}
+
+export type VenueStaffRow = {
+  id: string;
+  staffRole: "OWNER" | "MANAGER" | "STAFF" | string;
+  isActive: boolean;
+  user: {
+    id: string;
+    firstName?: string | null;
+    fullName?: string | null;
+    email?: string | null;
+    phone?: string | null;
+  };
+};
+
+export async function listVenueStaff(token: string, venueId: string) {
+  return apiRequest<{ ok: true; staff: VenueStaffRow[] }>(
+    `/admin/venues/${venueId}/staff`,
+    { token },
+  );
+}
+
 export async function createVenue(token: string, body: VenueCreateInput) {
   return apiRequest<{ ok: true; venue: Venue }>("/admin/venues", {
     method: "POST",
@@ -56,6 +82,30 @@ export async function createVenueMenu(
     `/admin/venues/${venueId}/menus`,
     { method: "POST", token, body },
   );
+}
+
+export async function patchVenueMenu(
+  token: string,
+  menuId: string,
+  body: {
+    name?: string;
+    description?: string;
+    dietaryType?: "VEGETARIAN" | "NON_VEGETARIAN" | "VEGAN";
+    costPerHead?: number;
+  },
+) {
+  return apiRequest<{ ok: true; menu: VenueMenu }>(`/admin/menus/${menuId}`, {
+    method: "PATCH",
+    token,
+    body,
+  });
+}
+
+export async function deleteVenueMenu(token: string, menuId: string) {
+  return apiRequest<{ ok: true }>(`/admin/menus/${menuId}`, {
+    method: "DELETE",
+    token,
+  });
 }
 
 export async function listVenueTables(token: string, venueId: string) {
@@ -101,9 +151,14 @@ export async function patchTable(
 export async function assignVenueStaff(
   token: string,
   venueId: string,
-  body: { userId: string; staffRole?: "OWNER" | "MANAGER" | "STAFF" },
+  body: {
+    userId?: string;
+    email?: string;
+    name?: string;
+    staffRole?: "OWNER" | "MANAGER" | "STAFF";
+  },
 ) {
-  return apiRequest<{ ok: true; staff: unknown }>(
+  return apiRequest<{ ok: true; staff: VenueStaffRow }>(
     `/admin/venues/${venueId}/staff`,
     { method: "POST", token, body },
   );

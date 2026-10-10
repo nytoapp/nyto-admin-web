@@ -5,9 +5,16 @@ export type HostApplication = {
   status: "PENDING" | "APPROVED" | "REJECTED" | string;
   contactName: string;
   contactPhone?: string | null;
+  contactEmail?: string | null;
   venueName?: string | null;
+  venueType?: string | null;
+  address?: string | null;
   city?: string | null;
+  area?: string | null;
+  businessDetails?: string | null;
   notes?: string | null;
+  rejectionReason?: string | null;
+  venueId?: string | null;
   createdAt: string;
   user?: {
     id: string;
