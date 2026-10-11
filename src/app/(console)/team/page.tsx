@@ -6,19 +6,25 @@ import { Button } from "@/components/ui/Button";
 import { FieldError, Input, Label } from "@/components/ui/Field";
 import { ErrorBanner, PageHeader, Skeleton } from "@/components/ui/Page";
 import { ApiError } from "@/lib/api/client";
-import { inviteAdmin, listTeam, type TeamMember } from "@/lib/api/team";
+import {
+  inviteAdmin,
+  listTeam,
+  revokeAdmin,
+  type TeamMember,
+} from "@/lib/api/team";
 import { statusLabel } from "@/lib/format";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
 import { MOCK_TEAM } from "@/lib/mock/data";
 import { useAuth } from "@/providers/auth-provider";
 
 export default function TeamPage() {
-  const { mockMode, getToken } = useAuth();
+  const { mockMode, getToken, user } = useAuth();
   const [rows, setRows] = useState<TeamMember[] | null>(null);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
 
   const {
     data,
@@ -78,6 +84,34 @@ export default function TeamPage() {
     }
   }
 
+  async function onRevoke(memberId: string) {
+    if (
+      !window.confirm(
+        "Revoke admin access? They will lose console access immediately.",
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setRevokingId(memberId);
+    try {
+      if (mockMode) {
+        setRows(members.filter((m) => m.id !== memberId));
+        return;
+      }
+      const token = await getToken();
+      if (!token) throw new ApiError("Session expired.", 401);
+      await revokeAdmin(token, memberId);
+      await reload();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not revoke admin.",
+      );
+    } finally {
+      setRevokingId(null);
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -102,23 +136,47 @@ export default function TeamPage() {
                     <th>Email</th>
                     <th>Role</th>
                     <th>Status</th>
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
-                  {members.map((m) => (
-                    <tr key={m.id}>
-                      <td className="font-medium text-ink">{m.name}</td>
-                      <td className="text-text-muted">{m.email}</td>
-                      <td>
-                        <Badge tone="accent">{statusLabel(m.role)}</Badge>
-                      </td>
-                      <td>
-                        <Badge tone={statusTone(m.status)}>
-                          {statusLabel(m.status)}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
+                  {members.map((m) => {
+                    const isSelf = Boolean(user?.id && m.id === user.id);
+                    const canRevoke = !isSelf && members.length > 1;
+                    return (
+                      <tr key={m.id}>
+                        <td className="font-medium text-ink">
+                          {m.name}
+                          {isSelf ? (
+                            <span className="ml-2 text-[12px] font-medium text-text-faint">
+                              you
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="text-text-muted">{m.email}</td>
+                        <td>
+                          <Badge tone="accent">{statusLabel(m.role)}</Badge>
+                        </td>
+                        <td>
+                          <Badge tone={statusTone(m.status)}>
+                            {statusLabel(m.status)}
+                          </Badge>
+                        </td>
+                        <td className="text-right">
+                          {canRevoke ? (
+                            <button
+                              type="button"
+                              disabled={revokingId === m.id}
+                              onClick={() => void onRevoke(m.id)}
+                              className="text-[13px] font-semibold text-danger hover:underline disabled:opacity-50"
+                            >
+                              {revokingId === m.id ? "Revoking…" : "Revoke"}
+                            </button>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

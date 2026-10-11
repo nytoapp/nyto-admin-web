@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/Page";
 import { ApiError } from "@/lib/api/client";
 import { listTableBookings, listTables } from "@/lib/api/tables";
-import { patchTable } from "@/lib/api/venues";
+import { cancelTable } from "@/lib/api/venues";
 import { formatMoneyInr, guestName, statusLabel } from "@/lib/format";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
 import { mapBookingRow, mapSessionRow, type SessionRow } from "@/lib/mappers";
@@ -82,7 +82,15 @@ export default function SessionsPage() {
   }, [q, rows, status]);
 
   async function cancelSession(id: string) {
-    if (!window.confirm("Cancel this session?")) return;
+    if (
+      !window.confirm(
+        "Cancel this session? Open bookings will be cancelled and captured payments refunded.",
+      )
+    ) {
+      return;
+    }
+    const reason =
+      window.prompt("Cancel reason (optional)")?.trim() || undefined;
     setActionError(null);
     if (mockMode) {
       setLocalRows(
@@ -93,7 +101,7 @@ export default function SessionsPage() {
     try {
       const token = await getToken();
       if (!token) throw new ApiError("Session expired.", 401);
-      await patchTable(token, id, { status: "CANCELLED" });
+      await cancelTable(token, id, reason);
       setLocalRows(null);
       await reload();
     } catch (err) {
