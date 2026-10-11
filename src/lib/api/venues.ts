@@ -142,10 +142,29 @@ export async function patchTable(
   tableId: string,
   body: Record<string, unknown>,
 ) {
-  return apiRequest<{ ok: true; table: AdminTable }>(
-    `/admin/tables/${tableId}`,
-    { method: "PATCH", token, body },
-  );
+  return apiRequest<{
+    ok: true;
+    table: AdminTable;
+    cancelledBookings?: number;
+    refundedPayments?: number;
+  }>(`/admin/tables/${tableId}`, { method: "PATCH", token, body });
+}
+
+export async function cancelTable(
+  token: string,
+  tableId: string,
+  reason?: string,
+) {
+  return apiRequest<{
+    ok: true;
+    table: AdminTable;
+    cancelledBookings: number;
+    refundedPayments: number;
+  }>(`/admin/tables/${tableId}/cancel`, {
+    method: "POST",
+    token,
+    body: { reason },
+  });
 }
 
 export async function assignVenueStaff(
@@ -161,5 +180,16 @@ export async function assignVenueStaff(
   return apiRequest<{ ok: true; staff: VenueStaffRow }>(
     `/admin/venues/${venueId}/staff`,
     { method: "POST", token, body },
+  );
+}
+
+export async function removeVenueStaff(
+  token: string,
+  venueId: string,
+  staffId: string,
+) {
+  return apiRequest<{ ok: true; staff: VenueStaffRow }>(
+    `/admin/venues/${venueId}/staff/${staffId}`,
+    { method: "DELETE", token },
   );
 }

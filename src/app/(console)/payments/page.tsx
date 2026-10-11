@@ -10,7 +10,8 @@ import {
   Skeleton,
   StatCard,
 } from "@/components/ui/Page";
-import { listPayments } from "@/lib/api/bookings";
+import { listPayments, refundPayment } from "@/lib/api/bookings";
+import { ApiError } from "@/lib/api/client";
 import { formatMoneyInr, statusLabel } from "@/lib/format";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
 import { mapPaymentRow, type PaymentRow } from "@/lib/mappers";
@@ -20,9 +21,12 @@ import { useAuth } from "@/providers/auth-provider";
 type StatusFilter = "all" | "CAPTURED" | "PENDING" | "FAILED" | "REFUNDED";
 
 export default function PaymentsPage() {
-  const { mockMode } = useAuth();
+  const { mockMode, getToken } = useAuth();
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
+  const [localRows, setLocalRows] = useState<PaymentRow[] | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [refundingId, setRefundingId] = useState<string | null>(null);
 
   const { data, loading, error, reload } = useAdminResource(
     !mockMode,
@@ -33,6 +37,7 @@ export default function PaymentsPage() {
   );
 
   const source = useMemo<PaymentRow[]>(() => {
+    if (localRows) return localRows;
     if (mockMode) {
       return MOCK_PAYMENTS.map((p) => ({
         id: p.id,
@@ -48,7 +53,7 @@ export default function PaymentsPage() {
       }));
     }
     return data ?? [];
-  }, [mockMode, data]);
+  }, [mockMode, data, localRows]);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -72,6 +77,41 @@ export default function PaymentsPage() {
     .filter((p) => p.status === "REFUNDED")
     .reduce((sum, p) => sum + p.amountValue, 0);
 
+  async function onRefund(id: string) {
+    if (
+      !window.confirm(
+        "Refund this payment? The linked booking will be cancelled if still open.",
+      )
+    ) {
+      return;
+    }
+    const reason =
+      window.prompt("Refund reason (optional)")?.trim() || undefined;
+    setActionError(null);
+    setRefundingId(id);
+    try {
+      if (mockMode) {
+        setLocalRows(
+          source.map((p) =>
+            p.id === id ? { ...p, status: "REFUNDED" } : p,
+          ),
+        );
+        return;
+      }
+      const token = await getToken();
+      if (!token) throw new ApiError("Session expired.", 401);
+      await refundPayment(token, id, reason);
+      setLocalRows(null);
+      await reload();
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : "Could not refund payment.",
+      );
+    } finally {
+      setRefundingId(null);
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -81,6 +121,12 @@ export default function PaymentsPage() {
       />
 
       {error ? <ErrorBanner message={error} onRetry={() => void reload()} /> : null}
+      {actionError ? (
+        <ErrorBanner
+          message={actionError}
+          onRetry={() => setActionError(null)}
+        />
+      ) : null}
 
       <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Rows" value={String(source.length)} />
@@ -148,6 +194,7 @@ export default function PaymentsPage() {
                   <th>Method</th>
                   <th>Ref</th>
                   <th>Status</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -169,6 +216,18 @@ export default function PaymentsPage() {
                       <Badge tone={statusTone(p.status)}>
                         {statusLabel(p.status)}
                       </Badge>
+                    </td>
+                    <td className="text-right">
+                      {p.status === "CAPTURED" ? (
+                        <button
+                          type="button"
+                          disabled={refundingId === p.id}
+                          onClick={() => void onRefund(p.id)}
+                          className="text-[13px] font-semibold text-danger hover:underline disabled:opacity-50"
+                        >
+                          {refundingId === p.id ? "Refunding…" : "Refund"}
+                        </button>
+                      ) : null}
                     </td>
                   </tr>
                 ))}

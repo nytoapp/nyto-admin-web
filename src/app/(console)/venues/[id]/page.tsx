@@ -15,6 +15,7 @@ import {
 import { ApiError } from "@/lib/api/client";
 import {
   assignVenueStaff,
+  cancelTable,
   createVenueMenu,
   createVenueTable,
   deleteVenueMenu,
@@ -22,9 +23,9 @@ import {
   listVenueMenus,
   listVenueStaff,
   listVenueTables,
-  patchTable,
   patchVenue,
   patchVenueMenu,
+  removeVenueStaff,
   type VenueStaffRow,
 } from "@/lib/api/venues";
 import { statusLabel } from "@/lib/format";
@@ -282,6 +283,7 @@ function mapStaffRow(s: VenueStaffRow) {
     name: s.user.fullName || s.user.firstName || "Staff",
     email: s.user.email || "—",
     role: s.staffRole,
+    active: s.isActive,
   };
 }
 
@@ -394,7 +396,13 @@ type SessionRow = {
   seats: string;
   status: string;
 };
-type StaffRow = { id: string; name: string; email: string; role: string };
+type StaffRow = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  active?: boolean;
+};
 
 function ExperiencesPanel({
   venueId,
@@ -702,7 +710,15 @@ function SessionsPanel({
   }
 
   async function cancelSession(id: string) {
-    if (!window.confirm("Cancel this session?")) return;
+    if (
+      !window.confirm(
+        "Cancel this session? Open bookings will be cancelled and captured payments refunded.",
+      )
+    ) {
+      return;
+    }
+    const reason =
+      window.prompt("Cancel reason (optional)")?.trim() || undefined;
     if (mockMode) {
       setRows((prev) =>
         prev.map((r) => (r.id === id ? { ...r, status: "CANCELLED" } : r)),
@@ -712,7 +728,7 @@ function SessionsPanel({
     try {
       const token = await getToken();
       if (!token) throw new ApiError("Session expired.", 401);
-      await patchTable(token, id, { status: "CANCELLED" });
+      await cancelTable(token, id, reason);
       onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not cancel.");
@@ -837,6 +853,7 @@ function StaffPanel({
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   useEffect(() => setRows(initial), [initial]);
 
@@ -858,6 +875,7 @@ function StaffPanel({
             name: name.trim(),
             email: email.trim().toLowerCase(),
             role,
+            active: true,
           },
         ]);
         setOk("Staff assigned (mock).");
@@ -884,6 +902,29 @@ function StaffPanel({
     }
   }
 
+  async function onRemove(staffId: string) {
+    if (!window.confirm("Remove this staff member from the venue?")) return;
+    setError(null);
+    setOk(null);
+    setRemovingId(staffId);
+    try {
+      if (mockMode) {
+        setRows((prev) => prev.filter((r) => r.id !== staffId));
+        setOk("Staff removed (mock).");
+        return;
+      }
+      const token = await getToken();
+      if (!token) throw new ApiError("Session expired.", 401);
+      await removeVenueStaff(token, venueId, staffId);
+      setOk("Staff removed.");
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not remove staff.");
+    } finally {
+      setRemovingId(null);
+    }
+  }
+
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
       <div className="nyto-panel overflow-hidden">
@@ -900,6 +941,7 @@ function StaffPanel({
                 <th>Name</th>
                 <th>Email</th>
                 <th>Role</th>
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -909,6 +951,16 @@ function StaffPanel({
                   <td className="text-text-muted">{s.email}</td>
                   <td>
                     <Badge tone="accent">{statusLabel(s.role)}</Badge>
+                  </td>
+                  <td className="text-right">
+                    <button
+                      type="button"
+                      disabled={removingId === s.id}
+                      onClick={() => void onRemove(s.id)}
+                      className="text-[13px] font-semibold text-danger hover:underline disabled:opacity-50"
+                    >
+                      {removingId === s.id ? "Removing…" : "Remove"}
+                    </button>
                   </td>
                 </tr>
               ))}

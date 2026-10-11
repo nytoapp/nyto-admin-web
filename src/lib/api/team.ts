@@ -24,3 +24,10 @@ export async function inviteAdmin(
     body,
   });
 }
+
+export async function revokeAdmin(token: string, userId: string) {
+  return apiRequest<{ ok: true; member: TeamMember }>(
+    `/admin/team/${userId}/revoke`,
+    { method: "POST", token, body: {} },
+  );
+}

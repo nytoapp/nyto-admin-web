@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge, statusTone } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Field";
 import {
@@ -18,11 +18,17 @@ import { useAuth } from "@/providers/auth-provider";
 export default function GuestsPage() {
   const { mockMode } = useAuth();
   const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedQ(q.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [q]);
 
   const { data, loading, error, reload } = useAdminResource(
     !mockMode,
     async (token) => {
-      const res = await listGuests(token);
+      const res = await listGuests(token, debouncedQ || undefined);
       return res.guests.map((g) => ({
         id: g.id,
         name: g.name,
@@ -33,19 +39,19 @@ export default function GuestsPage() {
         status: g.status,
       }));
     },
+    [debouncedQ],
   );
 
-  const rows = useMemo(() => {
-    const source = mockMode ? MOCK_GUESTS : (data ?? []);
-    const needle = q.trim().toLowerCase();
-    if (!needle) return source;
-    return source.filter((g) =>
-      [g.name, g.phone, g.email, g.lastVenue]
-        .join(" ")
-        .toLowerCase()
-        .includes(needle),
-    );
-  }, [q, mockMode, data]);
+  const rows = mockMode
+    ? MOCK_GUESTS.filter((g) => {
+        const needle = q.trim().toLowerCase();
+        if (!needle) return true;
+        return [g.name, g.phone, g.email, g.lastVenue]
+          .join(" ")
+          .toLowerCase()
+          .includes(needle);
+      })
+    : (data ?? []);
 
   return (
     <div>
@@ -70,12 +76,12 @@ export default function GuestsPage() {
       ) : rows.length === 0 ? (
         <EmptyState
           title={
-            !mockMode && (data?.length ?? 0) === 0 && !q.trim()
+            !mockMode && (data?.length ?? 0) === 0 && !debouncedQ
               ? "No guests yet"
               : "No guests found"
           }
           description={
-            !mockMode && (data?.length ?? 0) === 0 && !q.trim()
+            !mockMode && (data?.length ?? 0) === 0 && !debouncedQ
               ? "Guests appear after people create accounts or book nights."
               : "Try a different search."
           }
@@ -87,7 +93,8 @@ export default function GuestsPage() {
               <thead>
                 <tr>
                   <th>Guest</th>
-                  <th>Contact</th>
+                  <th>Phone</th>
+                  <th>Email</th>
                   <th>Bookings</th>
                   <th>Last venue</th>
                   <th>Status</th>
@@ -97,11 +104,11 @@ export default function GuestsPage() {
                 {rows.map((g) => (
                   <tr key={g.id}>
                     <td className="font-medium text-ink">{g.name}</td>
-                    <td>
-                      <div className="text-text-muted">{g.phone}</div>
-                      <div className="text-[13px] text-text-faint">{g.email}</div>
+                    <td className="text-text-muted">{g.phone}</td>
+                    <td className="text-text-muted">{g.email}</td>
+                    <td className="tabular-nums text-text-muted">
+                      {g.bookings}
                     </td>
-                    <td className="tabular-nums">{g.bookings}</td>
                     <td className="text-text-muted">{g.lastVenue}</td>
                     <td>
                       <Badge tone={statusTone(g.status)}>

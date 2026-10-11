@@ -31,3 +31,14 @@ export async function listPayments(token: string) {
     token,
   });
 }
+
+export async function refundPayment(
+  token: string,
+  paymentId: string,
+  reason?: string,
+) {
+  return apiRequest<{ ok: true; payment: AdminPayment }>(
+    `/admin/payments/${paymentId}/refund`,
+    { method: "POST", token, body: { reason } },
+  );
+}

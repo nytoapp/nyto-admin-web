@@ -69,7 +69,15 @@ export default function BookingsPage() {
   }, [q, rows, status]);
 
   async function onCancel(id: string) {
-    if (!window.confirm("Cancel this booking?")) return;
+    if (
+      !window.confirm(
+        "Cancel this booking? Captured payments will be refunded.",
+      )
+    ) {
+      return;
+    }
+    const reason =
+      window.prompt("Cancel reason (optional)")?.trim() || undefined;
     setActionError(null);
     if (mockMode) {
       setLocalRows(
@@ -80,7 +88,7 @@ export default function BookingsPage() {
     try {
       const token = await getToken();
       if (!token) throw new ApiError("Session expired.", 401);
-      await cancelBooking(token, id);
+      await cancelBooking(token, id, reason);
       setLocalRows(null);
       await reload();
     } catch (err) {
