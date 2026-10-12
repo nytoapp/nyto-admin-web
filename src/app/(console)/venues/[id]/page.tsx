@@ -28,6 +28,10 @@ import {
   removeVenueStaff,
   type VenueStaffRow,
 } from "@/lib/api/venues";
+import {
+  confirmDestructive,
+  loadConsoleSettings,
+} from "@/lib/console-settings";
 import { statusLabel } from "@/lib/format";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
 import {
@@ -638,10 +642,11 @@ function SessionsPanel({
   onChanged: () => void;
 }) {
   const { getToken } = useAuth();
+  const defaults = loadConsoleSettings();
   const [rows, setRows] = useState(initial);
   const [startsAt, setStartsAt] = useState("");
-  const [seatPrice, setSeatPrice] = useState("1299");
-  const [capacity, setCapacity] = useState("6");
+  const [seatPrice, setSeatPrice] = useState(String(defaults.defaultSeatPrice));
+  const [capacity, setCapacity] = useState(String(defaults.defaultCapacity));
   const [menuId, setMenuId] = useState(menuOptions[0]?.id ?? "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -711,7 +716,7 @@ function SessionsPanel({
 
   async function cancelSession(id: string) {
     if (
-      !window.confirm(
+      !confirmDestructive(
         "Cancel this session? Open bookings will be cancelled and captured payments refunded.",
       )
     ) {

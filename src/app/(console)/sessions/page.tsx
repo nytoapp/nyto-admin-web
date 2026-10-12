@@ -14,6 +14,7 @@ import {
 import { ApiError } from "@/lib/api/client";
 import { listTableBookings, listTables } from "@/lib/api/tables";
 import { cancelTable } from "@/lib/api/venues";
+import { confirmDestructive } from "@/lib/console-settings";
 import { formatMoneyInr, guestName, statusLabel } from "@/lib/format";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
 import { mapBookingRow, mapSessionRow, type SessionRow } from "@/lib/mappers";
@@ -83,7 +84,7 @@ export default function SessionsPage() {
 
   async function cancelSession(id: string) {
     if (
-      !window.confirm(
+      !confirmDestructive(
         "Cancel this session? Open bookings will be cancelled and captured payments refunded.",
       )
     ) {

@@ -1,3 +1,9 @@
+import {
+  currencyLocale,
+  loadConsoleSettings,
+  type ConsoleSettings,
+} from "@/lib/console-settings";
+
 /** Human-facing labels for backend enums. */
 const STATUS_LABELS: Record<string, string> = {
   OPEN: "Open",
@@ -48,35 +54,66 @@ export function statusLabel(status: string | null | undefined): string {
     .join(" ");
 }
 
+function activeSettings(): ConsoleSettings {
+  if (typeof window === "undefined") {
+    return {
+      city: "Hyderabad",
+      timezone: "Asia/Kolkata",
+      currency: "INR",
+      timeFormat: "12h",
+      defaultSeatPrice: 1299,
+      defaultCapacity: 6,
+      confirmDestructive: true,
+      compactTables: false,
+      highlightPending: true,
+    };
+  }
+  return loadConsoleSettings();
+}
+
 export function formatMoneyInr(
   amount: number | string | null | undefined,
+): string {
+  return formatMoney(amount);
+}
+
+export function formatMoney(
+  amount: number | string | null | undefined,
+  currencyOverride?: ConsoleSettings["currency"],
 ): string {
   if (amount === null || amount === undefined || amount === "") return "—";
   const n = typeof amount === "string" ? Number(amount) : amount;
   if (Number.isNaN(n)) return "—";
-  return new Intl.NumberFormat("en-IN", {
+  const currency = currencyOverride ?? activeSettings().currency;
+  return new Intl.NumberFormat(currencyLocale(currency), {
     style: "currency",
-    currency: "INR",
+    currency,
     maximumFractionDigits: 0,
   }).format(n);
 }
 
-/** e.g. 5 Dec · 8:00 PM */
+/** e.g. 5 Dec · 8:00 PM (respects console timezone + 12/24h). */
 export function formatWhen(
   value: string | Date | null | undefined,
 ): string {
   if (!value) return "—";
   const d = typeof value === "string" ? new Date(value) : value;
   if (Number.isNaN(d.getTime())) return "—";
+  const settings = activeSettings();
   const date = new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
     month: "short",
+    timeZone: settings.timezone,
   }).format(d);
-  const time = new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  }).format(d);
+  const time = new Intl.DateTimeFormat(
+    settings.timeFormat === "24h" ? "en-GB" : "en-US",
+    {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: settings.timeFormat !== "24h",
+      timeZone: settings.timezone,
+    },
+  ).format(d);
   return `${date} · ${time}`;
 }
 

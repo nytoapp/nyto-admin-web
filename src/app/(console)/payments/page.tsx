@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/Page";
 import { listPayments, refundPayment } from "@/lib/api/bookings";
 import { ApiError } from "@/lib/api/client";
+import { confirmDestructive } from "@/lib/console-settings";
 import { formatMoneyInr, statusLabel } from "@/lib/format";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
 import { mapPaymentRow, type PaymentRow } from "@/lib/mappers";
@@ -79,7 +80,7 @@ export default function PaymentsPage() {
 
   async function onRefund(id: string) {
     if (
-      !window.confirm(
+      !confirmDestructive(
         "Refund this payment? The linked booking will be cancelled if still open.",
       )
     ) {

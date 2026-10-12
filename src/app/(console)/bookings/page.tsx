@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/Page";
 import { cancelBooking, listBookings } from "@/lib/api/bookings";
 import { ApiError } from "@/lib/api/client";
+import { confirmDestructive } from "@/lib/console-settings";
 import { statusLabel } from "@/lib/format";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
 import { mapBookingRow, type BookingRow } from "@/lib/mappers";
@@ -70,7 +71,7 @@ export default function BookingsPage() {
 
   async function onCancel(id: string) {
     if (
-      !window.confirm(
+      !confirmDestructive(
         "Cancel this booking? Captured payments will be refunded.",
       )
     ) {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { applyConsoleSettings } from "@/lib/console-settings";
 import { useAuth } from "@/providers/auth-provider";
 import { Button } from "@/components/ui/Button";
 
@@ -44,6 +45,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
+    applyConsoleSettings();
+  }, []);
+
+  useEffect(() => {
     if (!ready) return;
     if (!user) router.replace("/login");
   }, [ready, user, router]);
@@ -52,7 +57,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (signingOut) return;
     setSigningOut(true);
     setMobileOpen(false);
-    // logout() hard-navigates to /login — no intermediate loading screen.
     await logout();
   }
 
@@ -68,7 +72,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) {
-    // Brief guard while redirecting unauthenticated users — keep blank, no spinner.
     return <div className="min-h-screen bg-bg" />;
   }
 
@@ -76,17 +79,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <>
       <Link
         href="/overview"
-        className="mb-8 flex items-center gap-2.5 px-2.5 pt-1"
+        className="mb-8 flex items-center gap-3 px-2.5 pt-1"
         onClick={() => setMobileOpen(false)}
       >
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-[13px] font-bold text-white shadow-[0_8px_24px_rgba(21,94,239,0.35)]">
+        <span className="nyto-brand-mark flex h-9 w-9 items-center justify-center rounded-xl text-[13px] font-bold text-white">
           N
         </span>
         <div>
-          <div className="text-[14px] font-semibold tracking-[0.14em] text-ink">
+          <div className="font-display text-[18px] font-medium tracking-[-0.03em] text-ink">
             NYTO
           </div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-faint">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-faint">
             Admin{mockMode ? " · Mock" : ""}
           </div>
         </div>
@@ -95,7 +98,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <nav className="flex flex-1 flex-col gap-5 overflow-y-auto">
         {NAV_GROUPS.map((group) => (
           <div key={group.label}>
-            <p className="mb-2 px-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-text-faint">
+            <p className="mb-2 px-2.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-text-faint">
               {group.label}
             </p>
             <div className="flex flex-col gap-0.5">
@@ -110,7 +113,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     onClick={() => setMobileOpen(false)}
                     className={`rounded-xl px-3 py-2.5 text-[14px] font-medium transition duration-150 ${
                       active
-                        ? "bg-[var(--accent-wash)] text-accent shadow-[inset_0_0_0_1px_rgba(21,94,239,0.18)]"
+                        ? "nyto-nav-active"
                         : "text-text-muted hover:bg-bg-soft hover:text-text"
                     }`}
                   >
@@ -123,7 +126,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ))}
       </nav>
 
-      <div className="mt-auto rounded-2xl border border-border bg-bg p-3.5">
+      <div className="mt-auto rounded-2xl border border-border bg-bg-soft/60 p-3.5 backdrop-blur-sm">
         <p className="truncate text-[13px] font-semibold text-ink">
           {user.fullName || "NYTO Admin"}
         </p>
@@ -143,9 +146,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen text-text">
+    <div className="nyto-shell min-h-screen text-text">
       <div className="mx-auto flex min-h-screen max-w-[1500px]">
-        <aside className="sticky top-0 hidden h-screen w-[260px] shrink-0 flex-col border-r border-border bg-bg-elevated/90 px-3 py-5 backdrop-blur-md lg:flex">
+        <aside className="nyto-sidebar sticky top-0 hidden h-screen w-[268px] shrink-0 flex-col px-3 py-5 lg:flex">
           {nav}
         </aside>
 
@@ -153,18 +156,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="fixed inset-0 z-40 lg:hidden">
             <button
               type="button"
-              className="absolute inset-0 bg-ink/40 backdrop-blur-[2px]"
+              className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"
               aria-label="Close menu"
               onClick={() => setMobileOpen(false)}
             />
-            <aside className="absolute left-0 top-0 flex h-full w-[min(288px,86vw)] flex-col border-r border-border bg-bg-elevated px-3 py-5 shadow-lg">
+            <aside className="nyto-sidebar absolute left-0 top-0 flex h-full w-[min(288px,86vw)] flex-col px-3 py-5 shadow-lg">
               {nav}
             </aside>
           </div>
         ) : null}
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b border-border bg-bg-elevated/90 backdrop-blur-md lg:hidden">
+        <div className="relative z-1 flex min-w-0 flex-1 flex-col">
+          <header className="sticky top-0 z-20 border-b border-border bg-bg/80 backdrop-blur-md lg:hidden">
             <div className="flex h-14 items-center gap-3 px-4">
               <button
                 type="button"
@@ -176,7 +179,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </button>
               <Link
                 href="/overview"
-                className="text-[14px] font-semibold tracking-[0.14em] text-ink"
+                className="font-display text-[16px] font-medium tracking-[-0.02em] text-ink"
               >
                 NYTO
               </Link>

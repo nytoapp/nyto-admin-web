@@ -19,7 +19,7 @@ export function PageHeader({
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="font-display text-[28px] font-semibold tracking-[-0.04em] text-ink sm:text-[32px]">
+        <h1 className="font-display text-[30px] font-medium tracking-[-0.03em] text-ink sm:text-[36px]">
           {title}
         </h1>
         {description ? (
@@ -102,11 +102,11 @@ export function StatCard({
   hint?: string;
 }) {
   return (
-    <div className="nyto-panel px-4 py-4 transition duration-200 hover:border-accent/25 hover:shadow-md sm:px-5 sm:py-5">
-      <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-text-faint">
+    <div className="nyto-panel px-4 py-4 transition duration-200 hover:border-accent/30 sm:px-5 sm:py-5">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-faint">
         {label}
       </p>
-      <p className="mt-2 text-[28px] font-semibold tracking-[-0.04em] text-ink tabular-nums sm:text-[34px]">
+      <p className="mt-2 font-display text-[30px] font-medium tracking-[-0.03em] text-ink tabular-nums sm:text-[34px]">
         {value}
       </p>
       {hint ? (

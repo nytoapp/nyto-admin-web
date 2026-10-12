@@ -118,7 +118,7 @@ export default function LoginPage() {
           style={{ animationDelay: "60ms" }}
         >
           <div className="inline-flex items-center gap-3 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 backdrop-blur-md">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent text-[11px] font-bold shadow-[0_8px_24px_rgba(21,94,239,0.45)]">
+            <span className="nyto-brand-mark flex h-7 w-7 items-center justify-center rounded-lg text-[11px] font-bold">
               N
             </span>
             <span className="pr-1 text-[11px] font-semibold tracking-[0.2em]">
@@ -173,17 +173,17 @@ export default function LoginPage() {
       </aside>
 
       {/* Form column */}
-      <main className="relative z-10 flex flex-1 items-center justify-center px-5 py-12 lg:bg-[#f3f5f8]">
+      <main className="relative z-10 flex flex-1 items-center justify-center px-5 py-12 lg:bg-[#0a0c10]">
         <div
           className="pointer-events-none absolute inset-0 hidden lg:block"
           style={{
             backgroundImage:
-              "radial-gradient(circle at 1px 1px, rgba(12,18,34,0.05) 1px, transparent 0)",
+              "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.04) 1px, transparent 0)",
             backgroundSize: "22px 22px",
           }}
         />
         <div
-          className="nyto-drift-slow pointer-events-none absolute right-[-10%] top-[-10%] hidden h-[420px] w-[420px] rounded-full bg-accent/10 blur-[100px] lg:block"
+          className="nyto-drift-slow pointer-events-none absolute right-[-10%] top-[-10%] hidden h-[420px] w-[420px] rounded-full bg-accent/15 blur-[100px] lg:block"
           aria-hidden
         />
 
@@ -200,17 +200,17 @@ export default function LoginPage() {
                 NYTO
               </span>
             </div>
-            <h2 className="font-display text-[30px] font-semibold tracking-[-0.04em] text-white">
+            <h2 className="font-display text-[30px] font-medium tracking-[-0.03em] text-white">
               Operations console
             </h2>
           </div>
 
-          <div className="rounded-[20px] border border-border bg-white p-7 shadow-[0_30px_80px_-40px_rgba(12,18,34,0.45)] sm:p-8">
+          <div className="nyto-panel-lg rounded-[20px] p-7 sm:p-8">
             <div className="mb-6">
-              <p className="text-[11px] font-semibold tracking-[0.18em] text-accent">
+              <p className="text-[11px] font-semibold tracking-[0.18em] text-accent-soft">
                 SIGN IN
               </p>
-              <h2 className="mt-2 hidden font-display text-[28px] font-semibold tracking-[-0.04em] text-ink lg:block">
+              <h2 className="mt-2 hidden font-display text-[28px] font-medium tracking-[-0.03em] text-ink lg:block">
                 {step === "email" ? "Welcome back" : "Enter your code"}
               </h2>
               <p className="mt-2 text-[13px] leading-relaxed text-text-muted">
@@ -281,14 +281,14 @@ export default function LoginPage() {
           </div>
 
           {mockMode ? (
-            <p className="mt-5 text-center text-[12px] text-white/55 lg:text-text-faint">
+            <p className="mt-5 text-center text-[12px] text-text-faint">
               Mock mode · code{" "}
-              <span className="font-mono font-semibold text-white/80 lg:text-text-muted">
+              <span className="font-mono font-semibold text-text-muted">
                 {MOCK_OTP}
               </span>
             </p>
           ) : (
-            <p className="mt-5 text-center text-[12px] text-white/55 lg:text-text-faint">
+            <p className="mt-5 text-center text-[12px] text-text-faint">
               Email OTP · rotating sessions
             </p>
           )}

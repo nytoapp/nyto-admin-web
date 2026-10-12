@@ -10,6 +10,7 @@ import {
   StatCard,
 } from "@/components/ui/Page";
 import { fetchOverview } from "@/lib/api/overview";
+import { loadConsoleSettings } from "@/lib/console-settings";
 import { statusLabel } from "@/lib/format";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
 import { mapBookingRow, mapPaymentRow } from "@/lib/mappers";
@@ -36,8 +37,14 @@ export default function OverviewPage() {
     },
   );
 
+  const highlightPending = loadConsoleSettings().highlightPending;
   const stats = mockMode ? MOCK_STATS : data?.stats;
-  const attention = mockMode ? MOCK_ATTENTION : (data?.attention ?? []);
+  const attentionRaw = mockMode ? MOCK_ATTENTION : (data?.attention ?? []);
+  const attention = highlightPending
+    ? attentionRaw
+    : attentionRaw.filter(
+        (item) => !/pending payment/i.test(item.label || item.id || ""),
+      );
   const bookings = mockMode
     ? MOCK_BOOKINGS.map((b) => ({
         ...b,
