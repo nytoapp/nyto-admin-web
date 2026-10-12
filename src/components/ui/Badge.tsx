@@ -1,9 +1,9 @@
 const toneClass: Record<string, string> = {
   neutral: "bg-bg-soft text-text-muted border-border",
-  accent: "bg-[var(--accent-wash)] text-accent border-accent/20",
-  success: "bg-success/10 text-success border-success/20",
-  warning: "bg-warning/10 text-warning border-warning/25",
-  danger: "bg-danger/10 text-danger border-danger/20",
+  accent: "bg-[var(--accent-wash)] text-accent-soft border-accent/25",
+  success: "bg-success/12 text-success border-success/25",
+  warning: "bg-warning/12 text-warning border-warning/30",
+  danger: "bg-danger/12 text-danger border-danger/25",
 };
 
 export function Badge({

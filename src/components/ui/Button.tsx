@@ -4,13 +4,13 @@ type Variant = "primary" | "secondary" | "ghost" | "danger";
 
 const styles: Record<Variant, string> = {
   primary:
-    "bg-accent text-white shadow-[0_1px_0_rgba(255,255,255,0.2)_inset,0_8px_24px_-8px_rgba(21,94,239,0.55)] hover:bg-accent-deep disabled:opacity-45",
+    "bg-accent text-white shadow-[0_1px_0_rgba(255,255,255,0.18)_inset,0_10px_28px_-10px_rgba(77,139,255,0.55)] hover:bg-accent-deep disabled:opacity-45",
   secondary:
-    "bg-bg-elevated text-text border border-border shadow-sm hover:bg-bg-soft hover:border-accent/30 disabled:opacity-45",
+    "bg-bg-soft text-text border border-border hover:bg-bg-hover hover:border-accent/35 disabled:opacity-45",
   ghost:
     "bg-transparent text-text-muted hover:text-text hover:bg-bg-soft disabled:opacity-45",
   danger:
-    "bg-danger/8 text-danger border border-danger/20 hover:bg-danger/12 disabled:opacity-45",
+    "bg-danger/10 text-danger border border-danger/25 hover:bg-danger/16 disabled:opacity-45",
 };
 
 export function Button({
