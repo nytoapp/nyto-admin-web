@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { Badge, statusTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { HostedByBadge } from "@/components/ui/HostedBy";
 import {
   ErrorBanner,
   PageHeader,
   Skeleton,
   StatCard,
 } from "@/components/ui/Page";
+import { resolveHostedBy } from "@/lib/hosted-by";
 import { fetchOverview } from "@/lib/api/overview";
 import { loadConsoleSettings } from "@/lib/console-settings";
 import { statusLabel } from "@/lib/format";
@@ -52,6 +54,7 @@ export default function OverviewPage() {
         paymentStatus: null as string | null,
         checkInCode: null as string | null,
         bookingType: null as string | null,
+        hostedBy: resolveHostedBy(b.hostedBy),
       }))
     : (data?.bookings ?? []);
   const payments = mockMode
@@ -61,6 +64,7 @@ export default function OverviewPage() {
         method: null as string | null,
         providerRef: null as string | null,
         bookingId: null as string | null,
+        hostedBy: resolveHostedBy(p.hostedBy),
       }))
     : (data?.payments ?? []);
 
@@ -153,6 +157,7 @@ export default function OverviewPage() {
                 <tr>
                   <th>Guest</th>
                   <th>When</th>
+                  <th>Hosted by</th>
                   <th>Amount</th>
                   <th>Status</th>
                 </tr>
@@ -160,7 +165,7 @@ export default function OverviewPage() {
               <tbody>
                 {bookings.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="text-text-muted">
+                    <td colSpan={5} className="text-text-muted">
                       No bookings yet.
                     </td>
                   </tr>
@@ -172,6 +177,9 @@ export default function OverviewPage() {
                         <div className="text-[13px] text-text-faint">{b.venue}</div>
                       </td>
                       <td className="text-text-muted">{b.when}</td>
+                      <td>
+                        <HostedByBadge value={b.hostedBy} short />
+                      </td>
                       <td className="tabular-nums text-text-muted">
                         {"amount" in b ? b.amount : "—"}
                       </td>
@@ -205,13 +213,14 @@ export default function OverviewPage() {
                   <th>Amount</th>
                   <th>Guest</th>
                   <th>Venue</th>
+                  <th>Hosted by</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {payments.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="text-text-muted">
+                    <td colSpan={5} className="text-text-muted">
                       No payments yet — they appear after checkout starts.
                     </td>
                   </tr>
@@ -225,6 +234,9 @@ export default function OverviewPage() {
                         {"guest" in p ? p.guest : "—"}
                       </td>
                       <td className="text-text-muted">{p.venue}</td>
+                      <td>
+                        <HostedByBadge value={p.hostedBy} short />
+                      </td>
                       <td>
                         <Badge tone={statusTone(p.status)}>
                           {statusLabel(p.status)}
