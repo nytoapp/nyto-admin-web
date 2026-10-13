@@ -4,6 +4,7 @@ import {
   formatWhen,
   guestName,
 } from "@/lib/format";
+import { resolveHostedBy, type HostedBy } from "@/lib/hosted-by";
 import type {
   AdminBooking,
   AdminPayment,
@@ -25,6 +26,7 @@ export type BookingRow = {
   paymentStatus: string | null;
   checkInCode: string | null;
   bookingType: string | null;
+  hostedBy: HostedBy;
 };
 
 export type PaymentRow = {
@@ -38,6 +40,7 @@ export type PaymentRow = {
   method: string | null;
   providerRef: string | null;
   bookingId: string | null;
+  hostedBy: HostedBy;
 };
 
 export type SessionRow = {
@@ -49,6 +52,7 @@ export type SessionRow = {
   seats: string;
   status: string;
   experience: string;
+  hostedBy: HostedBy;
 };
 
 export type VenueRow = {
@@ -60,9 +64,18 @@ export type VenueRow = {
   tables: number;
   staff: number;
   active: boolean;
+  /** Nights this venue currently surfaces in admin (frontend summary). */
+  hostedBy: HostedBy | "MIXED";
 };
 
-export function mapVenueRow(v: Venue): VenueRow {
+export function mapVenueRow(
+  v: Venue & { hostedBy?: HostedBy | "MIXED" | string | null },
+): VenueRow {
+  const raw = v.hostedBy;
+  const hostedBy: HostedBy | "MIXED" =
+    raw === "MIXED" || raw === "BOTH"
+      ? "MIXED"
+      : resolveHostedBy(raw);
   return {
     id: v.id,
     name: v.name,
@@ -72,6 +85,7 @@ export function mapVenueRow(v: Venue): VenueRow {
     tables: v._count?.tables ?? 0,
     staff: v._count?.staff ?? 0,
     active: v.isActive,
+    hostedBy,
   };
 }
 
@@ -94,6 +108,7 @@ export function mapBookingRow(b: AdminBooking): BookingRow {
     paymentStatus: b.payment?.status ?? null,
     checkInCode: b.checkInCode ?? null,
     bookingType: b.bookingType ?? null,
+    hostedBy: resolveHostedBy(b.table?.hostedBy),
   };
 }
 
@@ -110,6 +125,7 @@ export function mapPaymentRow(p: AdminPayment): PaymentRow {
     method: p.method ?? null,
     providerRef: p.providerRef ?? null,
     bookingId: p.bookingId ?? p.booking?.id ?? null,
+    hostedBy: resolveHostedBy(p.booking?.table?.hostedBy),
   };
 }
 
@@ -143,6 +159,7 @@ export function mapSessionRow(
     seats: formatSeats(t.seatsLeft, t.capacity),
     status: sessionDisplayStatus(t),
     experience: t.menu?.name || "—",
+    hostedBy: resolveHostedBy(t.hostedBy),
   };
 }
 

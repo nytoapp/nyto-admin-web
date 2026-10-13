@@ -6,6 +6,10 @@ import { Badge, statusTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
 import {
+  HostedByBadge,
+  HostedByFilterBar,
+} from "@/components/ui/HostedBy";
+import {
   EmptyState,
   ErrorBanner,
   PageHeader,
@@ -15,6 +19,7 @@ import { cancelBooking, listBookings } from "@/lib/api/bookings";
 import { ApiError } from "@/lib/api/client";
 import { confirmDestructive } from "@/lib/console-settings";
 import { statusLabel } from "@/lib/format";
+import type { HostedByFilter } from "@/lib/hosted-by";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
 import { mapBookingRow, type BookingRow } from "@/lib/mappers";
 import { MOCK_BOOKINGS } from "@/lib/mock/data";
@@ -32,6 +37,7 @@ export default function BookingsPage() {
   const { mockMode, getToken } = useAuth();
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
+  const [hostedBy, setHostedBy] = useState<HostedByFilter>("all");
   const [localRows, setLocalRows] = useState<BookingRow[] | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -61,13 +67,14 @@ export default function BookingsPage() {
     const needle = q.trim().toLowerCase();
     return rows.filter((b) => {
       if (status !== "all" && b.status !== status) return false;
+      if (hostedBy !== "all" && b.hostedBy !== hostedBy) return false;
       if (!needle) return true;
       return [b.guest, b.phone, b.venue, b.when, b.checkInCode, b.amount]
         .join(" ")
         .toLowerCase()
         .includes(needle);
     });
-  }, [q, rows, status]);
+  }, [q, rows, status, hostedBy]);
 
   async function onCancel(id: string) {
     if (
@@ -104,7 +111,7 @@ export default function BookingsPage() {
       <PageHeader
         eyebrow="Operations"
         title="Bookings"
-        description="Guest reservations across the network — from hold to check-in."
+        description="Guest reservations across NYTO curated and partner hosted nights."
       />
 
       {error ? <ErrorBanner message={error} onRetry={() => void reload()} /> : null}
@@ -112,19 +119,22 @@ export default function BookingsPage() {
         <ErrorBanner message={actionError} onRetry={() => setActionError(null)} />
       ) : null}
 
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-        <div className="min-w-0 flex-1 sm:max-w-sm">
-          <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search guest, phone, venue, code…"
-            aria-label="Search bookings"
-          />
+      <div className="mb-4 flex flex-col gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="min-w-0 flex-1 sm:max-w-sm">
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search guest, phone, venue, code…"
+              aria-label="Search bookings"
+            />
+          </div>
+          <HostedByFilterBar value={hostedBy} onChange={setHostedBy} />
         </div>
         <div className="flex flex-wrap rounded-xl border border-border bg-bg-elevated p-0.5">
           {(
             [
-              ["all", "All"],
+              ["all", "All statuses"],
               ["PENDING_PAYMENT", "Pending"],
               ["CONFIRMED", "Confirmed"],
               ["ATTENDED", "Attended"],
@@ -167,6 +177,7 @@ export default function BookingsPage() {
                 <tr>
                   <th>Guest</th>
                   <th>Venue</th>
+                  <th>Hosted by</th>
                   <th>When</th>
                   <th>Seats</th>
                   <th>Amount</th>
@@ -184,6 +195,9 @@ export default function BookingsPage() {
                       <div className="text-[13px] text-text-faint">{b.phone}</div>
                     </td>
                     <td className="text-text-muted">{b.venue}</td>
+                    <td>
+                      <HostedByBadge value={b.hostedBy} />
+                    </td>
                     <td className="text-text-muted">{b.when}</td>
                     <td className="tabular-nums">{b.seats}</td>
                     <td className="tabular-nums font-medium text-ink">

@@ -6,12 +6,17 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
 import {
+  HostedByBadge,
+  HostedByFilterBar,
+} from "@/components/ui/HostedBy";
+import {
   EmptyState,
   ErrorBanner,
   PageHeader,
   Skeleton,
 } from "@/components/ui/Page";
 import { listVenues } from "@/lib/api/venues";
+import type { HostedByFilter } from "@/lib/hosted-by";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
 import { mapVenueRow, type VenueRow } from "@/lib/mappers";
 import { MOCK_VENUES } from "@/lib/mock/data";
@@ -21,6 +26,7 @@ export default function VenuesPage() {
   const { mockMode } = useAuth();
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
+  const [hostedBy, setHostedBy] = useState<HostedByFilter>("all");
 
   const { data, loading, error, reload } = useAdminResource(
     !mockMode,
@@ -41,25 +47,28 @@ export default function VenuesPage() {
           tables: v.tables,
           staff: v.staff,
           active: v.active,
+          hostedBy: v.hostedBy,
         }))
       : (data ?? []);
     const needle = q.trim().toLowerCase();
     return source.filter((v) => {
       if (status === "active" && !v.active) return false;
       if (status === "inactive" && v.active) return false;
+      if (hostedBy === "NYTO" && v.hostedBy === "PARTNER") return false;
+      if (hostedBy === "PARTNER" && v.hostedBy === "NYTO") return false;
       if (!needle) return true;
       return [v.name, v.area, v.city, v.address]
         .join(" ")
         .toLowerCase()
         .includes(needle);
     });
-  }, [q, status, mockMode, data]);
+  }, [q, status, hostedBy, mockMode, data]);
 
   return (
     <div>
       <PageHeader
         title="Venues"
-        description="Places where NYTO experiences happen."
+        description="Places hosting NYTO curated and partner nights."
         actions={
           <Link href="/venues/new">
             <Button>+ Add venue</Button>
@@ -69,14 +78,17 @@ export default function VenuesPage() {
 
       {error ? <ErrorBanner message={error} onRetry={() => void reload()} /> : null}
 
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-        <div className="min-w-0 flex-1 sm:max-w-sm">
-          <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search name, area, city…"
-            aria-label="Search venues"
-          />
+      <div className="mb-4 flex flex-col gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="min-w-0 flex-1 sm:max-w-sm">
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search name, area, city…"
+              aria-label="Search venues"
+            />
+          </div>
+          <HostedByFilterBar value={hostedBy} onChange={setHostedBy} />
         </div>
         <div className="flex rounded-xl border border-border bg-bg-elevated p-0.5">
           {(
@@ -138,6 +150,7 @@ export default function VenuesPage() {
                 <tr>
                   <th>Venue</th>
                   <th>Location</th>
+                  <th>Nights</th>
                   <th>Sessions</th>
                   <th>Staff</th>
                   <th>Status</th>
@@ -150,6 +163,16 @@ export default function VenuesPage() {
                     <td className="font-medium text-ink">{v.name}</td>
                     <td className="text-text-muted">
                       {v.area} · {v.city}
+                    </td>
+                    <td>
+                      {v.hostedBy === "MIXED" ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          <HostedByBadge value="NYTO" short />
+                          <HostedByBadge value="PARTNER" short />
+                        </div>
+                      ) : (
+                        <HostedByBadge value={v.hostedBy} />
+                      )}
                     </td>
                     <td className="tabular-nums text-text-muted">{v.tables}</td>
                     <td className="tabular-nums text-text-muted">{v.staff}</td>

@@ -20,6 +20,7 @@ export const MOCK_BOOKINGS = [
     when: "5 Dec · 8:00 PM",
     seats: 1,
     status: "PENDING_PAYMENT",
+    hostedBy: "NYTO" as const,
   },
   {
     id: "b2",
@@ -30,6 +31,7 @@ export const MOCK_BOOKINGS = [
     when: "6 Dec · 7:30 PM",
     seats: 2,
     status: "CONFIRMED",
+    hostedBy: "PARTNER" as const,
   },
   {
     id: "b3",
@@ -40,6 +42,7 @@ export const MOCK_BOOKINGS = [
     when: "7 Dec · 8:00 PM",
     seats: 1,
     status: "CONFIRMED",
+    hostedBy: "NYTO" as const,
   },
   {
     id: "b4",
@@ -50,6 +53,7 @@ export const MOCK_BOOKINGS = [
     when: "1 Dec · 8:00 PM",
     seats: 2,
     status: "CANCELLED",
+    hostedBy: "PARTNER" as const,
   },
 ];
 
@@ -61,6 +65,7 @@ export const MOCK_PAYMENTS = [
     amount: "₹2,598",
     venue: "Hitech Terrace",
     status: "CAPTURED",
+    hostedBy: "PARTNER" as const,
   },
   {
     id: "p2",
@@ -69,6 +74,7 @@ export const MOCK_PAYMENTS = [
     amount: "₹1,299",
     venue: "Jubilee Supper Club",
     status: "CAPTURED",
+    hostedBy: "NYTO" as const,
   },
   {
     id: "p3",
@@ -77,6 +83,7 @@ export const MOCK_PAYMENTS = [
     amount: "₹1,299",
     venue: "SkyGarden Madhapur",
     status: "PENDING_PAYMENT",
+    hostedBy: "NYTO" as const,
   },
 ];
 
@@ -89,6 +96,7 @@ export const MOCK_NETWORK_SESSIONS = [
     price: "₹1,299",
     seats: "2 left · 6 seats",
     status: "OPEN",
+    hostedBy: "NYTO" as const,
   },
   {
     id: "ns2",
@@ -98,6 +106,7 @@ export const MOCK_NETWORK_SESSIONS = [
     price: "₹999",
     seats: "4 left · 6 seats",
     status: "OPEN",
+    hostedBy: "PARTNER" as const,
   },
   {
     id: "ns3",
@@ -107,6 +116,7 @@ export const MOCK_NETWORK_SESSIONS = [
     price: "₹1,499",
     seats: "6 left · 6 seats",
     status: "OPEN",
+    hostedBy: "NYTO" as const,
   },
   {
     id: "ns4",
@@ -116,6 +126,7 @@ export const MOCK_NETWORK_SESSIONS = [
     price: "₹999",
     seats: "0 left · 6 seats",
     status: "FULL",
+    hostedBy: "PARTNER" as const,
   },
   {
     id: "ns5",
@@ -125,6 +136,7 @@ export const MOCK_NETWORK_SESSIONS = [
     price: "₹1,199",
     seats: "3 left · 6 seats",
     status: "CANCELLED",
+    hostedBy: "PARTNER" as const,
   },
 ];
 
@@ -168,6 +180,7 @@ export const MOCK_VENUES = [
     tables: 3,
     staff: 2,
     active: true,
+    hostedBy: "MIXED" as const,
   },
   {
     id: "2",
@@ -178,6 +191,7 @@ export const MOCK_VENUES = [
     tables: 2,
     staff: 1,
     active: true,
+    hostedBy: "PARTNER" as const,
   },
   {
     id: "3",
@@ -188,6 +202,7 @@ export const MOCK_VENUES = [
     tables: 2,
     staff: 1,
     active: true,
+    hostedBy: "NYTO" as const,
   },
   {
     id: "4",
@@ -198,6 +213,7 @@ export const MOCK_VENUES = [
     tables: 1,
     staff: 0,
     active: true,
+    hostedBy: "PARTNER" as const,
   },
   {
     id: "5",
@@ -208,6 +224,7 @@ export const MOCK_VENUES = [
     tables: 0,
     staff: 0,
     active: false,
+    hostedBy: "NYTO" as const,
   },
 ];
 
@@ -234,6 +251,7 @@ export const MOCK_VENUE_SESSIONS = [
     seats: "2 left · 6 seats",
     status: "OPEN",
     experience: "3-course dinner",
+    hostedBy: "NYTO" as const,
   },
   {
     id: "s2",
@@ -242,6 +260,7 @@ export const MOCK_VENUE_SESSIONS = [
     seats: "6 left · 6 seats",
     status: "OPEN",
     experience: "3-course dinner",
+    hostedBy: "NYTO" as const,
   },
   {
     id: "s3",
@@ -250,6 +269,7 @@ export const MOCK_VENUE_SESSIONS = [
     seats: "0 left · 6 seats",
     status: "FULL",
     experience: "Vegetarian tasting",
+    hostedBy: "PARTNER" as const,
   },
 ];
 

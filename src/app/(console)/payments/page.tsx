@@ -4,6 +4,10 @@ import { useMemo, useState } from "react";
 import { Badge, statusTone } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Field";
 import {
+  HostedByBadge,
+  HostedByFilterBar,
+} from "@/components/ui/HostedBy";
+import {
   EmptyState,
   ErrorBanner,
   PageHeader,
@@ -14,6 +18,7 @@ import { listPayments, refundPayment } from "@/lib/api/bookings";
 import { ApiError } from "@/lib/api/client";
 import { confirmDestructive } from "@/lib/console-settings";
 import { formatMoneyInr, statusLabel } from "@/lib/format";
+import type { HostedByFilter } from "@/lib/hosted-by";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
 import { mapPaymentRow, type PaymentRow } from "@/lib/mappers";
 import { MOCK_PAYMENTS } from "@/lib/mock/data";
@@ -25,6 +30,7 @@ export default function PaymentsPage() {
   const { mockMode, getToken } = useAuth();
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
+  const [hostedBy, setHostedBy] = useState<HostedByFilter>("all");
   const [localRows, setLocalRows] = useState<PaymentRow[] | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [refundingId, setRefundingId] = useState<string | null>(null);
@@ -51,6 +57,7 @@ export default function PaymentsPage() {
         method: null,
         providerRef: null,
         bookingId: null,
+        hostedBy: p.hostedBy,
       }));
     }
     return data ?? [];
@@ -60,13 +67,14 @@ export default function PaymentsPage() {
     const needle = q.trim().toLowerCase();
     return source.filter((p) => {
       if (status !== "all" && p.status !== status) return false;
+      if (hostedBy !== "all" && p.hostedBy !== hostedBy) return false;
       if (!needle) return true;
       return [p.guest, p.venue, p.amount, p.when, p.providerRef, p.method]
         .join(" ")
         .toLowerCase()
         .includes(needle);
     });
-  }, [q, status, source]);
+  }, [q, status, hostedBy, source]);
 
   const capturedTotal = source
     .filter((p) => p.status === "CAPTURED")
@@ -118,7 +126,7 @@ export default function PaymentsPage() {
       <PageHeader
         eyebrow="Operations"
         title="Payments"
-        description="Ledger of guest checkout — pending, captured, and refunded."
+        description="Checkout ledger across NYTO curated and partner hosted nights."
       />
 
       {error ? <ErrorBanner message={error} onRetry={() => void reload()} /> : null}
@@ -136,19 +144,22 @@ export default function PaymentsPage() {
         <StatCard label="Refunded" value={formatMoneyInr(refundedTotal)} />
       </div>
 
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-        <div className="min-w-0 flex-1 sm:max-w-sm">
-          <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search guest, venue, ref…"
-            aria-label="Search payments"
-          />
+      <div className="mb-4 flex flex-col gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="min-w-0 flex-1 sm:max-w-sm">
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search guest, venue, ref…"
+              aria-label="Search payments"
+            />
+          </div>
+          <HostedByFilterBar value={hostedBy} onChange={setHostedBy} />
         </div>
         <div className="flex flex-wrap rounded-xl border border-border bg-bg-elevated p-0.5">
           {(
             [
-              ["all", "All"],
+              ["all", "All statuses"],
               ["CAPTURED", "Captured"],
               ["PENDING", "Pending"],
               ["REFUNDED", "Refunded"],
@@ -191,6 +202,7 @@ export default function PaymentsPage() {
                   <th>When</th>
                   <th>Guest</th>
                   <th>Venue</th>
+                  <th>Hosted by</th>
                   <th>Amount</th>
                   <th>Method</th>
                   <th>Ref</th>
@@ -204,6 +216,9 @@ export default function PaymentsPage() {
                     <td className="text-text-muted">{p.when}</td>
                     <td className="font-medium text-ink">{p.guest}</td>
                     <td className="text-text-muted">{p.venue}</td>
+                    <td>
+                      <HostedByBadge value={p.hostedBy} />
+                    </td>
                     <td className="font-medium tabular-nums text-ink">
                       {p.amount}
                     </td>

@@ -7,11 +7,16 @@ import { Badge, statusTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { FieldError, Input, Label, Select } from "@/components/ui/Field";
 import {
+  HostedByBadge,
+  NytoCuratedCreateNote,
+} from "@/components/ui/HostedBy";
+import {
   ErrorBanner,
   PageHeader,
   Skeleton,
   StatCard,
 } from "@/components/ui/Page";
+import type { HostedBy } from "@/lib/hosted-by";
 import { ApiError } from "@/lib/api/client";
 import {
   assignVenueStaff,
@@ -131,7 +136,15 @@ export default function VenueDetailPage() {
     ? MOCK_EXPERIENCES
     : (data?.menus ?? []);
   const sessions = mockMode
-    ? MOCK_VENUE_SESSIONS
+    ? MOCK_VENUE_SESSIONS.map((s) => ({
+        id: s.id,
+        when: s.when,
+        experience: s.experience,
+        price: s.price,
+        seats: s.seats,
+        status: s.status,
+        hostedBy: s.hostedBy,
+      }))
     : (data?.sessions ?? []);
   const staff = mockMode ? MOCK_VENUE_STAFF : (data?.staff ?? []);
   const active = Boolean(venue.isActive);
@@ -221,7 +234,7 @@ export default function VenueDetailPage() {
                   Manage experiences
                 </Button>
                 <Button className="w-full" onClick={() => setTab("sessions")}>
-                  Create session
+                  Create NYTO curated night
                 </Button>
                 <Button
                   variant="secondary"
@@ -399,6 +412,7 @@ type SessionRow = {
   price: string;
   seats: string;
   status: string;
+  hostedBy: HostedBy;
 };
 type StaffRow = {
   id: string;
@@ -687,6 +701,7 @@ function SessionsPanel({
               menuOptions.find((m) => m.id === menuId)?.name ||
               menuOptions[0]?.name ||
               "—",
+            hostedBy: "NYTO",
           },
           ...prev,
         ]);
@@ -695,6 +710,7 @@ function SessionsPanel({
       }
       const token = await getToken();
       if (!token) throw new ApiError("Session expired.", 401);
+      // Admin creates NYTO curated nights only — partners publish their own.
       await createVenueTable(token, venueId, {
         startsAt: toIsoFromLocalDatetime(startsAt),
         seatPrice: Number(seatPrice) || 0,
@@ -702,6 +718,7 @@ function SessionsPanel({
         priceTier: priceTierFromLocalDatetime(startsAt),
         menuId: menuId || undefined,
         status: "OPEN",
+        hostedBy: "NYTO",
       });
       setStartsAt("");
       onChanged();
@@ -749,6 +766,7 @@ function SessionsPanel({
               <tr>
                 <th>When</th>
                 <th>Experience</th>
+                <th>Hosted by</th>
                 <th>Price</th>
                 <th>Seats</th>
                 <th>Status</th>
@@ -760,6 +778,9 @@ function SessionsPanel({
                 <tr key={t.id}>
                   <td className="font-medium text-ink">{t.when}</td>
                   <td className="text-text-muted">{t.experience}</td>
+                  <td>
+                    <HostedByBadge value={t.hostedBy} />
+                  </td>
                   <td className="tabular-nums">{t.price}</td>
                   <td className="text-text-muted">{t.seats}</td>
                   <td>
@@ -768,7 +789,7 @@ function SessionsPanel({
                     </Badge>
                   </td>
                   <td className="text-right">
-                    {t.status !== "CANCELLED" ? (
+                    {t.status !== "CANCELLED" && t.hostedBy === "NYTO" ? (
                       <button
                         type="button"
                         onClick={() => void cancelSession(t.id)}
@@ -776,6 +797,10 @@ function SessionsPanel({
                       >
                         Cancel
                       </button>
+                    ) : t.hostedBy === "PARTNER" && t.status !== "CANCELLED" ? (
+                      <span className="text-[12px] text-text-faint">
+                        Venue-run
+                      </span>
                     ) : null}
                   </td>
                 </tr>
@@ -786,7 +811,10 @@ function SessionsPanel({
       </div>
 
       <form onSubmit={onCreate} className="nyto-panel h-fit space-y-3.5 p-5">
-        <h3 className="text-[15px] font-semibold text-ink">Create session</h3>
+        <h3 className="text-[15px] font-semibold text-ink">
+          Create NYTO curated night
+        </h3>
+        <NytoCuratedCreateNote />
         <div>
           <Label>Starts at</Label>
           <Input
@@ -832,7 +860,7 @@ function SessionsPanel({
         </div>
         <FieldError message={error} />
         <Button type="submit" className="w-full" disabled={busy}>
-          {busy ? "Creating…" : "Create session"}
+          {busy ? "Creating…" : "Create NYTO curated night"}
         </Button>
       </form>
     </div>

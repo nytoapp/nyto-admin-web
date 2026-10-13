@@ -253,7 +253,7 @@ export default function SettingsPage() {
                   Operations
                 </h2>
                 <p className="mt-1 text-[14px] text-text-muted">
-                  Defaults used when you create a session from a venue. Confirm
+                  Defaults for NYTO curated nights you create on a venue. Confirm
                   prompts protect money actions.
                 </p>
               </header>

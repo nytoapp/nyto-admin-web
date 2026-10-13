@@ -46,6 +46,9 @@ export type NytoTableType = "WEEKLY" | "WOMEN_LED" | "COUPLES" | "SINGLES";
 export type TablePaymentType = "ALL_INCLUSIVE" | "PAY_OWN_BILL";
 export type PriceTier = "DAYTIME" | "EVENING";
 
+/** Frontend-first; backend will persist later. */
+export type HostedBy = "NYTO" | "PARTNER";
+
 export type AdminTable = {
   id: string;
   venueId: string;
@@ -60,6 +63,8 @@ export type AdminTable = {
   vibeCopy?: string | null;
   inclusions: string[];
   status: TableStatus;
+  /** Who runs this night. Missing → treated as NYTO curated. */
+  hostedBy?: HostedBy | string | null;
   seatsTaken?: number;
   seatsLeft?: number;
   menu?: VenueMenu | null;

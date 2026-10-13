@@ -6,6 +6,10 @@ import { Badge, statusTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
 import {
+  HostedByBadge,
+  HostedByFilterBar,
+} from "@/components/ui/HostedBy";
+import {
   EmptyState,
   ErrorBanner,
   PageHeader,
@@ -16,6 +20,7 @@ import { listTableBookings, listTables } from "@/lib/api/tables";
 import { cancelTable } from "@/lib/api/venues";
 import { confirmDestructive } from "@/lib/console-settings";
 import { formatMoneyInr, guestName, statusLabel } from "@/lib/format";
+import type { HostedByFilter } from "@/lib/hosted-by";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
 import { mapBookingRow, mapSessionRow, type SessionRow } from "@/lib/mappers";
 import { MOCK_NETWORK_SESSIONS } from "@/lib/mock/data";
@@ -33,6 +38,7 @@ export default function SessionsPage() {
   const { mockMode, getToken } = useAuth();
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
+  const [hostedBy, setHostedBy] = useState<HostedByFilter>("all");
   const [localRows, setLocalRows] = useState<SessionRow[] | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [rosterId, setRosterId] = useState<string | null>(null);
@@ -65,6 +71,7 @@ export default function SessionsPage() {
         seats: r.seats,
         status: r.status,
         experience: "—",
+        hostedBy: r.hostedBy,
       }));
     }
     return data ?? [];
@@ -74,13 +81,14 @@ export default function SessionsPage() {
     const needle = q.trim().toLowerCase();
     return rows.filter((r) => {
       if (status !== "all" && r.status !== status) return false;
+      if (hostedBy !== "all" && r.hostedBy !== hostedBy) return false;
       if (!needle) return true;
-      return [r.when, r.venue, r.price, r.experience]
+      return [r.when, r.venue, r.price, r.experience, r.hostedBy]
         .join(" ")
         .toLowerCase()
         .includes(needle);
     });
-  }, [q, rows, status]);
+  }, [q, rows, status, hostedBy]);
 
   async function cancelSession(id: string) {
     if (
@@ -145,7 +153,7 @@ export default function SessionsPage() {
       <PageHeader
         eyebrow="Operations"
         title="Sessions"
-        description="Scheduled nights across all venues. Open a roster to see who’s booked."
+        description="NYTO curated and partner hosted nights. Open a roster to see who’s booked."
         actions={
           <Link href="/venues">
             <Button variant="secondary">Browse venues</Button>
@@ -161,19 +169,22 @@ export default function SessionsPage() {
         />
       ) : null}
 
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-        <div className="min-w-0 flex-1 sm:max-w-sm">
-          <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search venue or date…"
-            aria-label="Search sessions"
-          />
+      <div className="mb-4 flex flex-col gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="min-w-0 flex-1 sm:max-w-sm">
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search venue or date…"
+              aria-label="Search sessions"
+            />
+          </div>
+          <HostedByFilterBar value={hostedBy} onChange={setHostedBy} />
         </div>
         <div className="flex flex-wrap rounded-xl border border-border bg-bg-elevated p-0.5">
           {(
             [
-              ["all", "All"],
+              ["all", "All statuses"],
               ["OPEN", "Open"],
               ["FULL", "Full"],
               ["MATCHING", "Matching"],
@@ -203,7 +214,7 @@ export default function SessionsPage() {
           ) : filtered.length === 0 ? (
             <EmptyState
               title="No sessions"
-              description="Try another filter, or open a venue and create a night."
+              description="Try another filter, or open a venue to create a NYTO curated night. Partner nights appear when the venue publishes them."
               action={
                 <Link href="/venues">
                   <Button>Go to venues</Button>
@@ -218,6 +229,7 @@ export default function SessionsPage() {
                     <tr>
                       <th>When</th>
                       <th>Venue</th>
+                      <th>Hosted by</th>
                       <th>Price</th>
                       <th>Seats</th>
                       <th>Status</th>
@@ -234,6 +246,9 @@ export default function SessionsPage() {
                       >
                         <td className="font-medium text-ink">{r.when}</td>
                         <td className="text-text-muted">{r.venue}</td>
+                        <td>
+                          <HostedByBadge value={r.hostedBy} />
+                        </td>
                         <td className="tabular-nums">{r.price}</td>
                         <td className="text-text-muted">{r.seats}</td>
                         <td>
@@ -250,7 +265,7 @@ export default function SessionsPage() {
                             >
                               Roster
                             </button>
-                            {r.status !== "CANCELLED" ? (
+                            {r.status !== "CANCELLED" && r.hostedBy === "NYTO" ? (
                               <button
                                 type="button"
                                 onClick={() => void cancelSession(r.id)}
@@ -258,6 +273,11 @@ export default function SessionsPage() {
                               >
                                 Cancel
                               </button>
+                            ) : r.hostedBy === "PARTNER" &&
+                              r.status !== "CANCELLED" ? (
+                              <span className="text-[12px] text-text-faint">
+                                Venue-run
+                              </span>
                             ) : null}
                             <Link
                               href={`/venues/${r.venueId}`}
