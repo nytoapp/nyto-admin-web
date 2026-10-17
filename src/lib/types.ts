@@ -1,5 +1,8 @@
 export type UserRole = "USER" | "VENUE_STAFF" | "ADMIN";
 
+/** Frontend-first; backend will persist later. */
+export type HostedBy = "NYTO" | "PARTNER";
+
 export type AdminUser = {
   id: string;
   email?: string | null;
@@ -20,6 +23,8 @@ export type Venue = {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  /** Who organises nights — NYTO curated or partner venue. Frontend-first. */
+  hostedBy?: HostedBy | string | null;
   _count?: { tables: number; staff: number; menus: number };
 };
 
@@ -45,9 +50,6 @@ export type TableStatus =
 export type NytoTableType = "WEEKLY" | "WOMEN_LED" | "COUPLES" | "SINGLES";
 export type TablePaymentType = "ALL_INCLUSIVE" | "PAY_OWN_BILL";
 export type PriceTier = "DAYTIME" | "EVENING";
-
-/** Frontend-first; backend will persist later. */
-export type HostedBy = "NYTO" | "PARTNER";
 
 export type AdminTable = {
   id: string;
