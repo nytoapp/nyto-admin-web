@@ -4,10 +4,11 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
-import { FieldError, Input, Label } from "@/components/ui/Field";
+import { FieldError, Input, Label, Select } from "@/components/ui/Field";
 import { PageHeader } from "@/components/ui/Page";
 import { ApiError } from "@/lib/api/client";
 import { createVenue } from "@/lib/api/venues";
+import type { HostedBy } from "@/lib/hosted-by";
 import { useAuth } from "@/providers/auth-provider";
 
 export default function NewVenuePage() {
@@ -17,6 +18,7 @@ export default function NewVenuePage() {
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("Hyderabad");
   const [area, setArea] = useState("");
+  const [hostedBy, setHostedBy] = useState<HostedBy>("NYTO");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,7 +33,7 @@ export default function NewVenuePage() {
     try {
       if (mockMode) {
         await new Promise((r) => setTimeout(r, 400));
-        router.push("/venues/1");
+        router.push(hostedBy === "NYTO" ? "/venues/3" : "/venues/2");
         return;
       }
       const token = await getToken();
@@ -43,6 +45,8 @@ export default function NewVenuePage() {
         area: area.trim() || undefined,
         isActive: true,
       });
+      // hostedBy ships with backend later; route into venue detail for now.
+      void hostedBy;
       router.push(`/venues/${res.venue.id}`);
     } catch (err) {
       setError(
@@ -58,7 +62,7 @@ export default function NewVenuePage() {
     <div>
       <PageHeader
         title="Add venue"
-        description="Create a place NYTO can host nights."
+        description="Create a place for NYTO curated or partner nights."
         actions={
           <Link href="/venues">
             <Button variant="ghost">Cancel</Button>
@@ -105,6 +109,21 @@ export default function NewVenuePage() {
               />
             </div>
           </div>
+          <div>
+            <Label>Organised by</Label>
+            <Select
+              value={hostedBy}
+              onChange={(e) => setHostedBy(e.target.value as HostedBy)}
+            >
+              <option value="NYTO">NYTO curated</option>
+              <option value="PARTNER">Partner venue</option>
+            </Select>
+            <p className="mt-1.5 text-[12px] leading-relaxed text-text-faint">
+              {hostedBy === "NYTO"
+                ? "You’ll publish experiences and nights from admin."
+                : "Venue publishes packages. NYTO takes a platform share."}
+            </p>
+          </div>
           <FieldError message={error} />
           <Button type="submit" disabled={busy}>
             {busy ? "Creating…" : "Create venue"}
@@ -116,9 +135,13 @@ export default function NewVenuePage() {
             After create
           </p>
           <ol className="mt-3 list-decimal space-y-2 pl-4 leading-relaxed">
-            <li>Add an experience (menu package)</li>
-            <li>Create a session night</li>
-            <li>Assign venue staff if needed</li>
+            <li>
+              {hostedBy === "NYTO"
+                ? "Publish a NYTO curated experience (categories, diet, schedule)"
+                : "Wait for the venue to publish packages — view only in admin"}
+            </li>
+            <li>Add shift contacts (name, times, mobile)</li>
+            <li>Track bookings & payments from the sidebar</li>
           </ol>
         </aside>
       </div>

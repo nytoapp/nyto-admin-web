@@ -59,8 +59,8 @@ export function NytoCuratedCreateNote() {
     <div className="rounded-xl border border-accent/25 bg-[var(--accent-wash)] px-3.5 py-3 text-[13px] leading-relaxed text-text-muted">
       <p className="font-semibold text-accent-soft">NYTO curated night</p>
       <p className="mt-1">
-        Admin can only create nights NYTO is running. Partner hosted nights are
-        created by the venue — they’ll appear here once published.
+        Admin publishes nights only when NYTO is organising. Partner venues
+        manage their own packages — we take the platform share.
       </p>
     </div>
   );

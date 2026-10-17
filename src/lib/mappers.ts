@@ -64,18 +64,13 @@ export type VenueRow = {
   tables: number;
   staff: number;
   active: boolean;
-  /** Nights this venue currently surfaces in admin (frontend summary). */
-  hostedBy: HostedBy | "MIXED";
+  /** Who organises nights here — NYTO or the venue. Never mixed. */
+  hostedBy: HostedBy;
 };
 
 export function mapVenueRow(
-  v: Venue & { hostedBy?: HostedBy | "MIXED" | string | null },
+  v: Venue & { hostedBy?: HostedBy | string | null },
 ): VenueRow {
-  const raw = v.hostedBy;
-  const hostedBy: HostedBy | "MIXED" =
-    raw === "MIXED" || raw === "BOTH"
-      ? "MIXED"
-      : resolveHostedBy(raw);
   return {
     id: v.id,
     name: v.name,
@@ -85,7 +80,7 @@ export function mapVenueRow(
     tables: v._count?.tables ?? 0,
     staff: v._count?.staff ?? 0,
     active: v.isActive,
-    hostedBy,
+    hostedBy: resolveHostedBy(v.hostedBy),
   };
 }
 

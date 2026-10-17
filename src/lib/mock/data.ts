@@ -180,7 +180,7 @@ export const MOCK_VENUES = [
     tables: 3,
     staff: 2,
     active: true,
-    hostedBy: "MIXED" as const,
+    hostedBy: "NYTO" as const,
   },
   {
     id: "2",
@@ -234,57 +234,39 @@ export const MOCK_EXPERIENCES = [
     name: "3-course dinner",
     diet: "NON_VEGETARIAN",
     cost: "₹1,299",
+    costPerHead: 1299,
+    categories: ["WEEKLY", "SINGLES"] as const,
+    when: "5 Dec · 8:00 PM",
+    capacity: 6,
   },
   {
     id: "e2",
     name: "Vegetarian tasting",
     diet: "VEGETARIAN",
     cost: "₹999",
+    costPerHead: 999,
+    categories: ["WOMEN_LED"] as const,
+    when: "12 Dec · 7:30 PM",
+    capacity: 6,
   },
 ];
 
-export const MOCK_VENUE_SESSIONS = [
+export const MOCK_VENUE_CONTACTS = [
   {
-    id: "s1",
-    when: "5 Dec · 8:00 PM",
-    price: "₹1,299",
-    seats: "2 left · 6 seats",
-    status: "OPEN",
-    experience: "3-course dinner",
-    hostedBy: "NYTO" as const,
-  },
-  {
-    id: "s2",
-    when: "12 Dec · 8:00 PM",
-    price: "₹1,299",
-    seats: "6 left · 6 seats",
-    status: "OPEN",
-    experience: "3-course dinner",
-    hostedBy: "NYTO" as const,
-  },
-  {
-    id: "s3",
-    when: "28 Nov · 7:30 PM",
-    price: "₹999",
-    seats: "0 left · 6 seats",
-    status: "FULL",
-    experience: "Vegetarian tasting",
-    hostedBy: "PARTNER" as const,
-  },
-];
-
-export const MOCK_VENUE_STAFF = [
-  {
-    id: "st1",
+    id: "c1",
     name: "Kiran Rao",
+    phone: "+91 98765 43210",
     email: "kiran@skygarden.in",
-    role: "OWNER",
+    shiftStart: "11:00",
+    shiftEnd: "16:00",
   },
   {
-    id: "st2",
+    id: "c2",
     name: "Meera Shah",
-    email: "meera@skygarden.in",
-    role: "MANAGER",
+    phone: "+91 90000 11223",
+    email: "",
+    shiftStart: "16:00",
+    shiftEnd: "23:00",
   },
 ];
 

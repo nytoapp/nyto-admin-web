@@ -150,9 +150,9 @@ export default function VenuesPage() {
                 <tr>
                   <th>Venue</th>
                   <th>Location</th>
+                  <th>Organised by</th>
                   <th>Nights</th>
-                  <th>Sessions</th>
-                  <th>Staff</th>
+                  <th>Contacts</th>
                   <th>Status</th>
                   <th />
                 </tr>
@@ -165,14 +165,7 @@ export default function VenuesPage() {
                       {v.area} · {v.city}
                     </td>
                     <td>
-                      {v.hostedBy === "MIXED" ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          <HostedByBadge value="NYTO" short />
-                          <HostedByBadge value="PARTNER" short />
-                        </div>
-                      ) : (
-                        <HostedByBadge value={v.hostedBy} />
-                      )}
+                      <HostedByBadge value={v.hostedBy} />
                     </td>
                     <td className="tabular-nums text-text-muted">{v.tables}</td>
                     <td className="tabular-nums text-text-muted">{v.staff}</td>
