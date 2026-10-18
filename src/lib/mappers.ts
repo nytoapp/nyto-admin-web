@@ -17,16 +17,28 @@ export type BookingRow = {
   id: string;
   guest: string;
   phone: string;
+  email: string;
   venue: string;
   venueId: string;
+  area: string;
   when: string;
   seats: number;
   status: string;
   amount: string;
+  amountValue: number | null;
+  paymentId: string | null;
   paymentStatus: string | null;
+  paymentMethod: string | null;
+  paymentRef: string | null;
   checkInCode: string | null;
   bookingType: string | null;
+  /** Night category — Weekly / Women-led / Couples / Singles */
+  tableType: string | null;
+  capacity: number | null;
+  seatsLeft: number | null;
   hostedBy: HostedBy;
+  cancelReason: string | null;
+  createdAt: string | null;
 };
 
 export type PaymentRow = {
@@ -94,16 +106,30 @@ export function mapBookingRow(b: AdminBooking): BookingRow {
     id: b.id,
     guest: guestName(b.user),
     phone: b.user?.phone || "—",
+    email: b.user?.email || "—",
     venue: b.table?.venue?.name || "—",
     venueId: b.table?.venue?.id || b.table?.venueId || "",
+    area: b.table?.venue?.area || "—",
     when: formatWhen(b.table?.startsAt),
     seats: b.seatsBooked,
     status: b.status,
     amount: amount != null ? formatMoneyInr(amount) : "—",
+    amountValue: amount != null ? Number(amount) : null,
+    paymentId: b.payment?.id ?? null,
     paymentStatus: b.payment?.status ?? null,
+    paymentMethod: b.payment?.method ?? null,
+    paymentRef: b.payment?.providerRef ?? null,
     checkInCode: b.checkInCode ?? null,
     bookingType: b.bookingType ?? null,
-    hostedBy: resolveHostedBy(b.table?.hostedBy),
+    tableType: b.table?.tableType ?? null,
+    capacity: b.table?.capacity ?? null,
+    seatsLeft: b.table?.seatsLeft ?? null,
+    // Hosted-by lives on the venue — table field is guest-API derived only.
+    hostedBy: resolveHostedBy(
+      b.table?.hostedBy ?? b.table?.venue?.hostedBy,
+    ),
+    cancelReason: b.cancelReason ?? null,
+    createdAt: b.createdAt ?? null,
   };
 }
 
@@ -120,7 +146,9 @@ export function mapPaymentRow(p: AdminPayment): PaymentRow {
     method: p.method ?? null,
     providerRef: p.providerRef ?? null,
     bookingId: p.bookingId ?? p.booking?.id ?? null,
-    hostedBy: resolveHostedBy(p.booking?.table?.hostedBy),
+    hostedBy: resolveHostedBy(
+      p.booking?.table?.hostedBy ?? p.booking?.table?.venue?.hostedBy,
+    ),
   };
 }
 

@@ -97,7 +97,7 @@ export type AdminBooking = {
     email?: string | null;
   };
   table?: AdminTable & {
-    venue?: Pick<Venue, "id" | "name" | "city" | "area">;
+    venue?: Pick<Venue, "id" | "name" | "city" | "area" | "hostedBy">;
   };
   payment?: {
     id: string;

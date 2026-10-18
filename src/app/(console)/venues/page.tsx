@@ -1,32 +1,67 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Badge } from "@/components/ui/Badge";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
+import { HostedByBadge } from "@/components/ui/HostedBy";
 import {
-  HostedByBadge,
-  HostedByFilterBar,
-} from "@/components/ui/HostedBy";
+  ModuleChip,
+  ModuleFeed,
+  ModuleFeedRow,
+  ModuleFilters,
+  ModuleHero,
+} from "@/components/ui/ModuleShell";
 import {
   EmptyState,
   ErrorBanner,
-  PageHeader,
   Skeleton,
 } from "@/components/ui/Page";
 import { listVenues } from "@/lib/api/venues";
-import type { HostedByFilter } from "@/lib/hosted-by";
+import {
+  EXPERIENCE_CATEGORIES,
+  type ExperienceCategory,
+} from "@/lib/categories";
+import type { HostedBy, HostedByFilter } from "@/lib/hosted-by";
+import { resolveHostedBy } from "@/lib/hosted-by";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
-import { mapVenueRow, type VenueRow } from "@/lib/mappers";
+import { mapVenueRow } from "@/lib/mappers";
 import { MOCK_VENUES } from "@/lib/mock/data";
+import {
+  categoriesForVenue,
+  venueMatchesNightPhase,
+  type NightPhaseFilter,
+} from "@/lib/venue-experiences";
+import {
+  contactCountForVenue,
+  loadVenueHostedBy,
+} from "@/lib/venue-meta";
 import { useAuth } from "@/providers/auth-provider";
 
+type VenueListRow = {
+  id: string;
+  name: string;
+  area: string;
+  city: string;
+  tables: number;
+  active: boolean;
+  hostedBy: HostedBy;
+  contacts: number;
+  categories: ExperienceCategory[];
+  nightPhase: "present" | "upcoming" | "cancelled" | "none";
+};
+
+type CategoryFilter = "all" | ExperienceCategory;
+
 export default function VenuesPage() {
+  const router = useRouter();
   const { mockMode } = useAuth();
   const [q, setQ] = useState("");
-  const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
   const [hostedBy, setHostedBy] = useState<HostedByFilter>("all");
+  const [category, setCategory] = useState<CategoryFilter>("all");
+  const [nightPhase, setNightPhase] = useState<NightPhaseFilter>("all");
+  const [metaTick, setMetaTick] = useState(0);
 
   const { data, loading, error, reload } = useAdminResource(
     !mockMode,
@@ -36,158 +71,233 @@ export default function VenuesPage() {
     },
   );
 
-  const filtered = useMemo(() => {
-    const source: VenueRow[] = mockMode
+  useEffect(() => {
+    const onFocus = () => setMetaTick((n) => n + 1);
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
+
+  const rows = useMemo(() => {
+    void metaTick;
+    return mockMode
       ? MOCK_VENUES.map((v) => ({
           id: v.id,
           name: v.name,
           area: v.area,
           city: v.city,
-          address: v.address,
           tables: v.tables,
-          staff: v.staff,
           active: v.active,
-          hostedBy: v.hostedBy,
+          hostedBy: loadVenueHostedBy(v.id) ?? (v.hostedBy as HostedBy),
+          contacts: contactCountForVenue(v.id, v.staff),
+          categories: [...v.categories] as ExperienceCategory[],
+          nightPhase: v.nightPhase,
         }))
-      : (data ?? []);
+      : (data ?? []).map((v) => {
+          const cats = categoriesForVenue(v.id);
+          let phase: VenueListRow["nightPhase"] = "none";
+          if (venueMatchesNightPhase(v.id, "present")) phase = "present";
+          else if (venueMatchesNightPhase(v.id, "upcoming")) phase = "upcoming";
+          else if (venueMatchesNightPhase(v.id, "cancelled"))
+            phase = "cancelled";
+          return {
+            id: v.id,
+            name: v.name,
+            area: v.area,
+            city: v.city,
+            tables: v.tables,
+            active: v.active,
+            hostedBy: resolveHostedBy(v.hostedBy),
+            contacts: contactCountForVenue(v.id, 0),
+            categories: cats,
+            nightPhase: phase,
+          };
+        });
+  }, [mockMode, data, metaTick]);
+
+  const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return source.filter((v) => {
-      if (status === "active" && !v.active) return false;
-      if (status === "inactive" && v.active) return false;
-      if (hostedBy === "NYTO" && v.hostedBy === "PARTNER") return false;
-      if (hostedBy === "PARTNER" && v.hostedBy === "NYTO") return false;
+    return rows.filter((v) => {
+      if (!v.active) return false;
+      if (hostedBy !== "all" && v.hostedBy !== hostedBy) return false;
+      if (category !== "all" && !v.categories.includes(category)) return false;
+      if (nightPhase !== "all" && v.nightPhase !== nightPhase) return false;
       if (!needle) return true;
-      return [v.name, v.area, v.city, v.address]
-        .join(" ")
-        .toLowerCase()
-        .includes(needle);
+      return [v.name, v.area, v.city].join(" ").toLowerCase().includes(needle);
     });
-  }, [q, status, hostedBy, mockMode, data]);
+  }, [rows, q, hostedBy, category, nightPhase]);
+
+  const nytoCount = rows.filter((v) => v.active && v.hostedBy === "NYTO").length;
+  const partnerCount = rows.filter(
+    (v) => v.active && v.hostedBy === "PARTNER",
+  ).length;
 
   return (
-    <div>
-      <PageHeader
+    <div className="nyto-fade">
+      <ModuleHero
+        eyebrow="Operations"
         title="Venues"
-        description="Places hosting NYTO curated and partner nights."
+        description="Houses on the network — NYTO curated and partner kitchens. Click a row to open."
         actions={
           <Link href="/venues/new">
             <Button>+ Add venue</Button>
           </Link>
         }
+        stats={[
+          { label: "Active", value: String(rows.filter((v) => v.active).length) },
+          { label: "NYTO", value: String(nytoCount), soft: true },
+          { label: "Partner", value: String(partnerCount), soft: true },
+          { label: "Showing", value: String(filtered.length), soft: true },
+        ]}
       />
 
       {error ? <ErrorBanner message={error} onRetry={() => void reload()} /> : null}
 
-      <div className="mb-4 flex flex-col gap-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-          <div className="min-w-0 flex-1 sm:max-w-sm">
+      <ModuleFilters>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="min-w-0 flex-1 lg:max-w-[280px]">
             <Input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search name, area, city…"
+              placeholder="Search venues…"
               aria-label="Search venues"
             />
           </div>
-          <HostedByFilterBar value={hostedBy} onChange={setHostedBy} />
+          <div
+            className="flex rounded-xl border border-border bg-bg p-0.5"
+            role="group"
+            aria-label="Organised by"
+          >
+            {(
+              [
+                ["all", "All"],
+                ["NYTO", "NYTO"],
+                ["PARTNER", "Partner"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setHostedBy(id)}
+                className={`rounded-lg px-3.5 py-2 text-[13px] font-semibold transition ${
+                  hostedBy === id
+                    ? "bg-bg-soft text-ink"
+                    : "text-text-muted hover:text-text"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="flex rounded-xl border border-border bg-bg-elevated p-0.5">
-          {(
-            [
-              ["all", "All"],
-              ["active", "Active"],
-              ["inactive", "Inactive"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setStatus(id)}
-              className={`rounded-lg px-3 py-2 text-[13px] font-semibold transition ${
-                status === id
-                  ? "bg-bg-soft text-ink"
-                  : "text-text-muted hover:text-text"
-              }`}
-            >
-              {label}
-            </button>
+
+        <div className="mt-3 flex flex-wrap gap-1.5" role="group" aria-label="Table type">
+          <ModuleChip
+            active={category === "all"}
+            onClick={() => setCategory("all")}
+            label="Any type"
+          />
+          {EXPERIENCE_CATEGORIES.map((c) => (
+            <ModuleChip
+              key={c.id}
+              active={category === c.id}
+              onClick={() => setCategory(c.id)}
+              label={c.label}
+              title={c.hint}
+            />
           ))}
         </div>
-      </div>
+
+        <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border-subtle pt-3">
+          {(
+            [
+              ["all", "Any night"],
+              ["present", "Present"],
+              ["upcoming", "Upcoming"],
+              ["cancelled", "Cancelled"],
+            ] as const
+          ).map(([id, label]) => (
+            <ModuleChip
+              key={id}
+              active={nightPhase === id}
+              onClick={() => setNightPhase(id)}
+              label={label}
+            />
+          ))}
+        </div>
+      </ModuleFilters>
 
       {loading && !mockMode ? (
-        <Skeleton className="h-64" />
+        <div className="overflow-hidden rounded-2xl border border-border">
+          <Skeleton className="h-[72px] rounded-none" />
+          <Skeleton className="h-[72px] rounded-none opacity-70" />
+        </div>
       ) : filtered.length === 0 ? (
         <EmptyState
-          title={
-            status === "inactive"
-              ? "No inactive venues"
-              : status === "active"
-                ? "No active venues"
-                : "No matching venues"
-          }
-          description={
-            status === "inactive"
-              ? "Disabled venues will show up here."
-              : "Try a different search or filter."
-          }
+          title="No venues match"
+          description="Try another search or clear filters."
           action={
             <Button
               variant="secondary"
               onClick={() => {
                 setQ("");
-                setStatus("all");
+                setHostedBy("all");
+                setCategory("all");
+                setNightPhase("all");
               }}
             >
-              Clear filters
+              Clear
             </Button>
           }
         />
       ) : (
-        <div className="nyto-panel overflow-hidden">
-          <div className="nyto-table-wrap">
-            <table className="nyto-table">
-              <thead>
-                <tr>
-                  <th>Venue</th>
-                  <th>Location</th>
-                  <th>Organised by</th>
-                  <th>Nights</th>
-                  <th>Contacts</th>
-                  <th>Status</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((v) => (
-                  <tr key={v.id}>
-                    <td className="font-medium text-ink">{v.name}</td>
-                    <td className="text-text-muted">
-                      {v.area} · {v.city}
-                    </td>
-                    <td>
-                      <HostedByBadge value={v.hostedBy} />
-                    </td>
-                    <td className="tabular-nums text-text-muted">{v.tables}</td>
-                    <td className="tabular-nums text-text-muted">{v.staff}</td>
-                    <td>
-                      <Badge tone={v.active ? "success" : "neutral"}>
-                        {v.active ? "Active" : "Inactive"}
-                      </Badge>
-                    </td>
-                    <td className="text-right">
-                      <Link
-                        href={`/venues/${v.id}`}
-                        className="font-semibold text-accent hover:underline"
-                      >
-                        Open
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <ModuleFeed
+          headers={
+            <div className="hidden border-b border-border-subtle px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-faint lg:grid lg:grid-cols-[minmax(0,1.5fr)_100px_72px_72px_28px] lg:gap-3">
+              <span>Venue</span>
+              <span>Hosted</span>
+              <span className="text-right">Nights</span>
+              <span className="text-right">Contacts</span>
+              <span />
+            </div>
+          }
+        >
+          {filtered.map((v, i) => (
+            <li
+              key={v.id}
+              className="nyto-step-in border-b border-border-subtle last:border-0"
+              style={{ animationDelay: `${120 + Math.min(i, 10) * 40}ms` }}
+            >
+              <ModuleFeedRow
+                onClick={() => router.push(`/venues/${v.id}`)}
+                className="lg:grid-cols-[minmax(0,1.5fr)_100px_72px_72px_28px] lg:items-center lg:gap-3"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-[15px] font-semibold tracking-[-0.02em] text-ink">
+                    {v.name}
+                  </p>
+                  <p className="mt-1 truncate text-[12px] text-text-faint">
+                    {v.area} · {v.city}
+                  </p>
+                </div>
+                <div className="hidden lg:block">
+                  <HostedByBadge value={v.hostedBy} short />
+                </div>
+                <p className="tabular-nums text-[13px] text-text-muted lg:text-right">
+                  {v.tables}
+                </p>
+                <p className="tabular-nums text-[13px] text-text-muted lg:text-right">
+                  {v.contacts}
+                </p>
+                <span
+                  className="nyto-bookings-arrow hidden text-[16px] text-text-faint lg:block lg:text-right"
+                  aria-hidden
+                >
+                  →
+                </span>
+              </ModuleFeedRow>
+            </li>
+          ))}
+        </ModuleFeed>
       )}
     </div>
   );

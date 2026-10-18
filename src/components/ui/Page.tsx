@@ -96,21 +96,38 @@ export function StatCard({
   label,
   value,
   hint,
+  accent,
 }: {
   label: string;
   value: string;
   hint?: string;
+  /** Soft left accent for hierarchy on dense dashboards */
+  accent?: "accent" | "success" | "warning" | "neutral";
 }) {
+  const bar =
+    accent === "success"
+      ? "bg-success"
+      : accent === "warning"
+        ? "bg-warning"
+        : accent === "neutral"
+          ? "bg-border"
+          : "bg-accent";
   return (
-    <div className="nyto-panel px-4 py-4 transition duration-200 hover:border-accent/30 sm:px-5 sm:py-5">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-faint">
+    <div className="nyto-panel relative overflow-hidden px-4 py-3.5 transition duration-200 hover:border-accent/30 sm:px-5 sm:py-4">
+      <span
+        className={`absolute inset-y-3 left-0 w-[3px] rounded-full ${bar} opacity-80`}
+        aria-hidden
+      />
+      <p className="pl-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-faint">
         {label}
       </p>
-      <p className="mt-2 font-display text-[30px] font-medium tracking-[-0.03em] text-ink tabular-nums sm:text-[34px]">
+      <p className="mt-1.5 pl-2 font-display text-[28px] font-medium tracking-[-0.03em] text-ink tabular-nums sm:text-[32px]">
         {value}
       </p>
       {hint ? (
-        <p className="mt-1.5 text-[13px] text-text-muted">{hint}</p>
+        <p className="mt-1 pl-2 text-[12px] leading-snug text-text-muted">
+          {hint}
+        </p>
       ) : null}
     </div>
   );

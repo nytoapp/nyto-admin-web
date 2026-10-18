@@ -65,3 +65,16 @@ export function NytoCuratedCreateNote() {
     </div>
   );
 }
+
+export function PartnerHostedReadNote() {
+  return (
+    <div className="rounded-xl border border-success/25 bg-success/[0.07] px-4 py-3.5 text-[13px] leading-relaxed text-text-muted">
+      <p className="font-semibold text-success">Partner venue dashboard</p>
+      <p className="mt-1.5">
+        Experiences, categories, diet, price, and schedule are created by the
+        venue team in their dashboard. They sync here for ops and into the NYTO
+        guest app. Admin does not edit packages — NYTO takes the platform share.
+      </p>
+    </div>
+  );
+}

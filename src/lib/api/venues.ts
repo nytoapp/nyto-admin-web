@@ -9,6 +9,8 @@ export type VenueCreateInput = {
   lat?: number;
   lng?: number;
   isActive?: boolean;
+  /** Persisted on Venue — drives who may publish packages. */
+  hostedBy?: "NYTO" | "PARTNER";
 };
 
 export async function listVenues(token: string) {
