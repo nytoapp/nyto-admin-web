@@ -15,6 +15,13 @@ export async function listBookings(
   );
 }
 
+export async function getBooking(token: string, bookingId: string) {
+  return apiRequest<{ ok: true; booking: AdminBooking }>(
+    `/admin/bookings/${bookingId}`,
+    { token },
+  );
+}
+
 export async function cancelBooking(
   token: string,
   bookingId: string,

@@ -6,9 +6,13 @@ import { Badge, statusTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Field";
 import {
+  ModuleFilters,
+  ModuleHero,
+  ModulePill,
+} from "@/components/ui/ModuleShell";
+import {
   EmptyState,
   ErrorBanner,
-  PageHeader,
   Skeleton,
 } from "@/components/ui/Page";
 import { ApiError } from "@/lib/api/client";
@@ -169,12 +173,28 @@ export default function HostApplicationsPage() {
     }
   }
 
+  const pendingCount = filtered.filter((r) => r.status === "PENDING").length;
+
   return (
-    <div>
-      <PageHeader
+    <div className="nyto-fade">
+      <ModuleHero
         eyebrow="Network"
         title="Host applications"
-        description="Review intent, address, and notes — then approve into a venue."
+        description="Leads from nightai.com / socials (venue name, official email, mobile) land here. Enquire, then approve into a partner venue — login goes to that email."
+        stats={[
+          { label: "In view", value: String(filtered.length) },
+          { label: "Pending", value: String(pendingCount), soft: true },
+          {
+            label: "Approved",
+            value: String(filtered.filter((r) => r.status === "APPROVED").length),
+            soft: true,
+          },
+          {
+            label: "Rejected",
+            value: String(filtered.filter((r) => r.status === "REJECTED").length),
+            soft: true,
+          },
+        ]}
       />
 
       {error ? <ErrorBanner message={error} onRetry={() => void reload()} /> : null}
@@ -185,8 +205,8 @@ export default function HostApplicationsPage() {
         />
       ) : null}
 
-      <div className="mb-4">
-        <div className="inline-flex flex-wrap rounded-xl border border-border bg-bg-elevated p-0.5">
+      <ModuleFilters>
+        <div className="flex flex-wrap gap-1" role="tablist" aria-label="Application status">
           {(
             [
               ["PENDING", "Pending"],
@@ -195,21 +215,19 @@ export default function HostApplicationsPage() {
               ["ALL", "All"],
             ] as const
           ).map(([id, label]) => (
-            <button
+            <ModulePill
               key={id}
-              type="button"
+              active={status === id}
               onClick={() => setStatus(id)}
-              className={`rounded-lg px-3 py-2 text-[13px] font-semibold transition ${
-                status === id
-                  ? "bg-bg-soft text-ink"
-                  : "text-text-muted hover:text-text"
-              }`}
-            >
-              {label}
-            </button>
+              label={label}
+            />
           ))}
         </div>
-      </div>
+        <p className="mt-2.5 text-[12px] text-text-faint">
+          Approve creates a partner venue. Credentials / greeting go to their
+          official email — then they publish nights in the venue portal.
+        </p>
+      </ModuleFilters>
 
       {loading && !mockMode && !data ? (
         <Skeleton className="h-64" />
@@ -223,15 +241,19 @@ export default function HostApplicationsPage() {
           }
         />
       ) : (
-        <div className="space-y-3">
-          {filtered.map((r) => {
+        <div className="space-y-2">
+          {filtered.map((r, i) => {
             const open = expandedId === r.id;
             return (
-              <article key={r.id} className="nyto-panel overflow-hidden">
+              <article
+                key={r.id}
+                className="nyto-step-in overflow-hidden rounded-2xl border border-border bg-bg-elevated/70 shadow-[var(--shadow-sm)]"
+                style={{ animationDelay: `${120 + Math.min(i, 8) * 40}ms` }}
+              >
                 <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-[15px] font-semibold text-ink">
+                      <h3 className="text-[15px] font-semibold tracking-[-0.02em] text-ink">
                         {r.name}
                       </h3>
                       <Badge tone={statusTone(r.status)}>

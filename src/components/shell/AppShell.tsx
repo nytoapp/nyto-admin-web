@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { applyConsoleSettings } from "@/lib/console-settings";
 import { useAuth } from "@/providers/auth-provider";
 import { Button } from "@/components/ui/Button";
 
@@ -16,7 +15,6 @@ const NAV_GROUPS = [
     label: "Operations",
     items: [
       { href: "/venues", label: "Venues" },
-      { href: "/sessions", label: "Sessions" },
       { href: "/bookings", label: "Bookings" },
       { href: "/payments", label: "Payments" },
     ],
@@ -30,10 +28,7 @@ const NAV_GROUPS = [
   },
   {
     label: "Console",
-    items: [
-      { href: "/team", label: "Team" },
-      { href: "/settings", label: "Settings" },
-    ],
+    items: [{ href: "/team", label: "Team" }],
   },
 ];
 
@@ -43,10 +38,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, logout, ready, mockMode } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
-
-  useEffect(() => {
-    applyConsoleSettings();
-  }, []);
 
   useEffect(() => {
     if (!ready) return;

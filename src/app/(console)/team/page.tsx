@@ -4,7 +4,8 @@ import { FormEvent, useEffect, useState } from "react";
 import { Badge, statusTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { FieldError, Input, Label } from "@/components/ui/Field";
-import { ErrorBanner, PageHeader, Skeleton } from "@/components/ui/Page";
+import { ModuleHero } from "@/components/ui/ModuleShell";
+import { ErrorBanner, Skeleton } from "@/components/ui/Page";
 import { ApiError } from "@/lib/api/client";
 import {
   inviteAdmin,
@@ -41,6 +42,8 @@ export default function TeamPage() {
   }, [data]);
 
   const members = mockMode ? (rows ?? MOCK_TEAM) : (rows ?? data ?? []);
+  const invited = members.filter((m) => m.status === "INVITED").length;
+  const active = members.filter((m) => m.status === "ACTIVE").length;
 
   async function onInvite(e: FormEvent) {
     e.preventDefault();
@@ -113,102 +116,151 @@ export default function TeamPage() {
   }
 
   return (
-    <div>
-      <PageHeader
+    <div className="nyto-fade">
+      <ModuleHero
+        eyebrow="Console"
         title="Team"
-        description="Founders and ops who can access the NYTO admin console."
+        description="People with full NYTO Admin access — invite by work email, revoke anytime."
+        stats={[
+          { label: "Members", value: String(members.length) },
+          { label: "Active", value: String(active), soft: true },
+          { label: "Invited", value: String(invited), soft: true },
+          {
+            label: "You",
+            value: user?.email?.split("@")[0] ?? "—",
+            soft: true,
+          },
+        ]}
       />
 
       {loadError ? (
         <ErrorBanner message={loadError} onRetry={() => void reload()} />
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
-        {loading && !mockMode && !data ? (
-          <Skeleton className="h-64" />
-        ) : (
-          <div className="nyto-panel overflow-hidden">
-            <div className="nyto-table-wrap">
-              <table className="nyto-table">
-                <thead>
-                  <tr>
-                    <th>Member</th>
-                    <th>Email</th>
-                    <th>Role</th>
-                    <th>Status</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {members.map((m) => {
-                    const isSelf = Boolean(user?.id && m.id === user.id);
-                    const canRevoke = !isSelf && members.length > 1;
-                    return (
-                      <tr key={m.id}>
-                        <td className="font-medium text-ink">
+      <div className="mx-auto grid max-w-5xl gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <section
+          className="overflow-hidden rounded-2xl border border-border bg-bg-elevated/60 shadow-[var(--shadow-sm)] nyto-rise"
+          style={{ animationDelay: "80ms" }}
+        >
+          <div className="border-b border-border-subtle px-5 py-3.5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-faint">
+              Console access
+            </p>
+            <p className="mt-1 text-[13px] text-text-muted">
+              Every member here is an Admin — full ops console.
+            </p>
+          </div>
+
+          {loading && !mockMode && !data ? (
+            <div className="space-y-0">
+              <Skeleton className="h-[72px] rounded-none" />
+              <Skeleton className="h-[72px] rounded-none opacity-60" />
+            </div>
+          ) : members.length === 0 ? (
+            <p className="px-5 py-10 text-center text-[13px] text-text-muted">
+              No team members yet.
+            </p>
+          ) : (
+            <ul className="divide-y divide-border-subtle">
+              {members.map((m, i) => {
+                const isSelf = Boolean(user?.id && m.id === user.id);
+                const canRevoke = !isSelf && members.length > 1;
+                return (
+                  <li
+                    key={m.id}
+                    className="nyto-step-in flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                    style={{ animationDelay: `${120 + Math.min(i, 8) * 40}ms` }}
+                  >
+                    <div className="min-w-0 flex items-start gap-3">
+                      <span
+                        className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent-wash)] text-[13px] font-semibold text-accent-soft"
+                        aria-hidden
+                      >
+                        {(m.name || "?").charAt(0).toUpperCase()}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-[15px] font-semibold tracking-[-0.02em] text-ink">
                           {m.name}
                           {isSelf ? (
-                            <span className="ml-2 text-[12px] font-medium text-text-faint">
+                            <span className="ml-2 rounded-md bg-bg-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-text-faint">
                               you
                             </span>
                           ) : null}
-                        </td>
-                        <td className="text-text-muted">{m.email}</td>
-                        <td>
-                          <Badge tone="accent">{statusLabel(m.role)}</Badge>
-                        </td>
-                        <td>
-                          <Badge tone={statusTone(m.status)}>
-                            {statusLabel(m.status)}
-                          </Badge>
-                        </td>
-                        <td className="text-right">
-                          {canRevoke ? (
-                            <button
-                              type="button"
-                              disabled={revokingId === m.id}
-                              onClick={() => void onRevoke(m.id)}
-                              className="text-[13px] font-semibold text-danger hover:underline disabled:opacity-50"
-                            >
-                              {revokingId === m.id ? "Revoking…" : "Revoke"}
-                            </button>
-                          ) : null}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+                        </p>
+                        <p className="mt-0.5 truncate text-[13px] text-text-faint">
+                          {m.email || "—"}
+                        </p>
+                      </div>
+                    </div>
 
-        <form onSubmit={onInvite} className="nyto-panel h-fit space-y-3.5 p-5">
-          <h3 className="text-[15px] font-semibold text-ink">Invite admin</h3>
-          <div>
-            <Label>Name</Label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Full name"
-            />
+                    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                      <Badge tone="accent">{statusLabel(m.role)}</Badge>
+                      <Badge tone={statusTone(m.status)}>
+                        {statusLabel(m.status)}
+                      </Badge>
+                      {canRevoke ? (
+                        <button
+                          type="button"
+                          disabled={revokingId === m.id}
+                          onClick={() => void onRevoke(m.id)}
+                          className="ml-1 text-[12px] font-semibold text-text-muted transition hover:text-ink disabled:opacity-50"
+                        >
+                          {revokingId === m.id ? "…" : "Revoke"}
+                        </button>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
+        <form
+          onSubmit={onInvite}
+          className="h-fit overflow-hidden rounded-2xl border border-border bg-bg-elevated/70 shadow-[var(--shadow-sm)] nyto-rise"
+          style={{ animationDelay: "120ms" }}
+        >
+          <div className="border-b border-border-subtle px-5 py-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-faint">
+              Invite
+            </p>
+            <h3 className="mt-1 text-[15px] font-semibold tracking-[-0.02em] text-ink">
+              Grant admin access
+            </h3>
+            <p className="mt-1.5 text-[13px] leading-relaxed text-text-faint">
+              They get the full console. Sign-in is email OTP.
+            </p>
           </div>
-          <div>
-            <Label>Work email</Label>
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="ops@nyto.app"
-            />
+
+          <div className="space-y-3.5 px-5 py-4">
+            <div>
+              <Label>Name</Label>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Full name"
+              />
+            </div>
+            <div>
+              <Label>Work email</Label>
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="ops@nyto.app"
+              />
+            </div>
+            <FieldError message={error} />
+            <Button type="submit" className="w-full" disabled={busy}>
+              {busy ? "Inviting…" : "Grant admin access"}
+            </Button>
+            <ol className="space-y-1.5 border-t border-border-subtle pt-3 text-[12px] leading-relaxed text-text-faint">
+              <li>1. You invite with name + work email</li>
+              <li>2. Account is promoted to Admin</li>
+              <li>3. They sign in with OTP on that email</li>
+            </ol>
           </div>
-          <FieldError message={error} />
-          <Button type="submit" className="w-full" disabled={busy}>
-            {busy ? "Inviting…" : "Grant admin access"}
-          </Button>
-          <p className="text-[12px] text-text-faint">
-            Promotes the account to ADMIN. They sign in with email OTP.
-          </p>
         </form>
       </div>
     </div>

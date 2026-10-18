@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { FieldError, Input, Label, Select } from "@/components/ui/Field";
 import {
   HostedByBadge,
-  NytoCuratedCreateNote,
+  PartnerHostedReadNote,
 } from "@/components/ui/HostedBy";
 import {
   ErrorBanner,
@@ -18,7 +18,9 @@ import {
 } from "@/components/ui/Page";
 import { ApiError } from "@/lib/api/client";
 import {
+  cancelTable,
   createVenueMenu,
+  createVenueTable,
   deleteVenueMenu,
   getVenue,
   listVenueMenus,
@@ -32,18 +34,38 @@ import {
   toggleCategory,
   type ExperienceCategory,
 } from "@/lib/categories";
-import { loadConsoleSettings } from "@/lib/console-settings";
+import { confirmDestructive } from "@/lib/console-settings";
 import { statusLabel } from "@/lib/format";
 import { resolveHostedBy, type HostedBy } from "@/lib/hosted-by";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
-import { mapExperienceRow } from "@/lib/mappers";
-import { MOCK_EXPERIENCES, MOCK_VENUE_CONTACTS, MOCK_VENUES } from "@/lib/mock/data";
+import {
+  mapExperienceRow,
+  priceTierFromLocalDatetime,
+  toIsoFromLocalDatetime,
+} from "@/lib/mappers";
+import {
+  loadVenueNights,
+  saveVenueNights,
+  upsertVenueNight,
+  type StoredNight,
+} from "@/lib/venue-experiences";
+import {
+  MOCK_EXPERIENCES,
+  MOCK_PARTNER_EXPERIENCES,
+  MOCK_VENUE_CONTACTS,
+  MOCK_VENUES,
+} from "@/lib/mock/data";
 import {
   formatShiftRange,
   loadVenueContacts,
   saveVenueContacts,
   type VenueContact,
 } from "@/lib/venue-contacts";
+import {
+  contactCountForVenue,
+  loadVenueHostedBy,
+  saveVenueHostedBy,
+} from "@/lib/venue-meta";
 import { useAuth } from "@/providers/auth-provider";
 
 type Tab = "overview" | "experiences" | "contacts";
@@ -58,6 +80,11 @@ export default function VenueDetailPage() {
 
   const mockVenue =
     MOCK_VENUES.find((v) => v.id === venueId) ?? MOCK_VENUES[0]!;
+
+  useEffect(() => {
+    // Demo fallback only — live API hostedBy is authoritative below.
+    setLocalHostedBy(loadVenueHostedBy(venueId));
+  }, [venueId]);
 
   const { data, loading, error, reload } = useAdminResource(
     !mockMode && Boolean(venueId),
@@ -78,6 +105,14 @@ export default function VenueDetailPage() {
     [venueId],
   );
 
+  // Keep localStorage aligned with server so a stale NYTO flag cannot unlock publish.
+  useEffect(() => {
+    if (mockMode || !data?.venue?.hostedBy) return;
+    const server = resolveHostedBy(data.venue.hostedBy);
+    saveVenueHostedBy(venueId, server);
+    setLocalHostedBy(server);
+  }, [mockMode, data?.venue?.hostedBy, venueId]);
+
   const venue = mockMode
     ? {
         id: mockVenue.id,
@@ -90,8 +125,12 @@ export default function VenueDetailPage() {
       }
     : data?.venue;
 
+  // Live API wins — never let a stale localStorage flip override Partner → NYTO
+  // (that was letting admin publish tables on partner kitchens).
   const hostedBy: HostedBy = resolveHostedBy(
-    localHostedBy ?? venue?.hostedBy ?? (mockMode ? mockVenue.hostedBy : "NYTO"),
+    mockMode
+      ? (localHostedBy ?? mockVenue.hostedBy)
+      : (venue?.hostedBy ?? localHostedBy),
   );
 
   async function toggleActive() {
@@ -130,8 +169,11 @@ export default function VenueDetailPage() {
     );
   }
 
-  const experiences = mockMode
-    ? MOCK_EXPERIENCES.map((e) => ({
+  const active = Boolean(venue.isActive);
+  const isNyto = hostedBy === "NYTO";
+
+  const experiences: ExperienceRow[] = mockMode
+    ? (isNyto ? MOCK_EXPERIENCES : MOCK_PARTNER_EXPERIENCES).map((e) => ({
         id: e.id,
         name: e.name,
         diet: e.diet,
@@ -140,44 +182,64 @@ export default function VenueDetailPage() {
         categories: [...e.categories] as ExperienceCategory[],
         when: e.when,
         capacity: e.capacity,
+        status: "OPEN" as const,
+        fromVenueDashboard: !isNyto,
       }))
     : (data?.menus ?? []).map((m) => ({
         ...m,
         categories: [] as ExperienceCategory[],
         when: "—",
         capacity: undefined as number | undefined,
+        status: "OPEN" as const,
+        fromVenueDashboard: !isNyto,
       }));
 
-  const active = Boolean(venue.isActive);
-  const isNyto = hostedBy === "NYTO";
-
   return (
-    <div>
-      <PageHeader
-        title={venue.name}
-        description={`${venue.area || "—"} · ${venue.city} · ${venue.address}`}
-        actions={
-          <>
-            <HostedByBadge value={hostedBy} />
-            <Badge tone={active ? "success" : "neutral"}>
-              {active ? "Active" : "Inactive"}
-            </Badge>
-            {!mockMode ? (
-              <Button
-                variant="secondary"
-                disabled={toggling}
-                onClick={() => void toggleActive()}
-              >
-                {active ? "Disable" : "Enable"}
-              </Button>
-            ) : null}
-          </>
-        }
-      />
+    <div className="nyto-fade">
+      <div className="nyto-bookings-hero relative mb-6 overflow-hidden rounded-[22px] border border-border bg-bg-elevated shadow-[var(--shadow-md)]">
+        <div
+          className={`pointer-events-none absolute inset-0 ${
+            isNyto
+              ? "bg-[radial-gradient(900px_420px_at_0%_-10%,rgba(77,139,255,0.16),transparent_55%)]"
+              : "bg-[radial-gradient(900px_420px_at_0%_-10%,rgba(52,211,153,0.12),transparent_55%)]"
+          }`}
+          aria-hidden
+        />
+        <div className="relative z-[2] px-5 py-6 sm:px-7 sm:py-7">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-faint">
+                Venue
+              </p>
+              <h1 className="mt-2 font-display text-[32px] font-medium leading-none tracking-[-0.04em] text-ink sm:text-[38px]">
+                {venue.name}
+              </h1>
+              <p className="mt-2.5 text-[14px] text-text-muted">
+                {venue.area || "—"} · {venue.city} · {venue.address}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <HostedByBadge value={hostedBy} />
+              <Badge tone={active ? "success" : "neutral"}>
+                {active ? "Active" : "Inactive"}
+              </Badge>
+              {!mockMode ? (
+                <Button
+                  variant="secondary"
+                  disabled={toggling}
+                  onClick={() => void toggleActive()}
+                >
+                  {active ? "Disable" : "Enable"}
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {error ? <ErrorBanner message={error} onRetry={() => void reload()} /> : null}
 
-      <div className="mb-6 flex gap-1 overflow-x-auto border-b border-border">
+      <div className="mb-6 flex flex-wrap gap-1 rounded-xl border border-border bg-bg-elevated/80 p-1">
         {(
           [
             ["overview", "Overview"],
@@ -189,10 +251,10 @@ export default function VenueDetailPage() {
             key={id}
             type="button"
             onClick={() => setTab(id)}
-            className={`shrink-0 border-b-2 px-3 py-2.5 text-[14px] font-semibold transition ${
+            className={`rounded-lg px-3.5 py-2 text-[13px] font-semibold transition ${
               tab === id
-                ? "border-accent text-ink"
-                : "border-transparent text-text-muted hover:text-text"
+                ? "bg-ink text-bg"
+                : "text-text-muted hover:bg-bg-soft hover:text-text"
             }`}
           >
             {label}
@@ -202,16 +264,31 @@ export default function VenueDetailPage() {
 
       {tab === "overview" ? (
         <div className="space-y-5">
+          <div
+            className={`rounded-2xl border px-4 py-3.5 ${
+              isNyto
+                ? "border-accent/25 bg-[var(--accent-wash)]"
+                : "border-success/20 bg-success/[0.06]"
+            }`}
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-faint">
+              Operating mode
+            </p>
+            <p className="mt-1 text-[15px] font-semibold text-ink">
+              {isNyto ? "NYTO curated house" : "Partner hosted kitchen"}
+            </p>
+            <p className="mt-1 max-w-xl text-[13px] leading-relaxed text-text-muted">
+              {isNyto
+                ? "Admin publishes experiences — categories, diet, schedule, capacity."
+                : "Venue team creates packages in their dashboard. They sync here (view-only) and into the NYTO guest app. You take the platform share."}
+            </p>
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-3">
-            <StatCard label="Experiences" value={String(experiences.length)} />
             <StatCard
-              label="Organised by"
-              value={hostedBy === "NYTO" ? "NYTO" : "Venue"}
-              hint={
-                isNyto
-                  ? "Admin publishes nights here"
-                  : "Venue publishes · NYTO platform share"
-              }
+              label="Experiences"
+              value={String(experiences.length)}
+              accent="accent"
             />
             <StatCard
               label="Open nights"
@@ -220,14 +297,21 @@ export default function VenueDetailPage() {
                   ? experiences.filter((e) => e.when !== "—").length
                   : (data?.openNights ?? 0),
               )}
+              accent="neutral"
+            />
+            <StatCard
+              label="Contacts"
+              value={String(contactCountForVenue(venueId, 0))}
+              hint="Shift managers on call"
+              accent="success"
             />
           </div>
-          <div className="grid gap-5 lg:grid-cols-[1fr_280px]">
+
+          <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
             <EditVenueForm
               venueId={venueId}
               mockMode={mockMode}
               hostedBy={hostedBy}
-              onHostedByChange={setLocalHostedBy}
               initial={{
                 name: venue.name,
                 address: venue.address,
@@ -236,27 +320,41 @@ export default function VenueDetailPage() {
               }}
               onSaved={() => void reload()}
             />
-            <div className="nyto-panel h-fit p-5">
-              <h3 className="text-[15px] font-semibold text-ink">Quick actions</h3>
-              <p className="mt-1 text-[14px] text-text-muted">
-                {isNyto
-                  ? "Publish NYTO curated nights and keep floor contacts current."
-                  : "Partner venue — packages live on their side. Keep contacts ready."}
-              </p>
-              <div className="mt-4 flex flex-col gap-2">
-                <Button
-                  className="w-full"
-                  onClick={() => setTab("experiences")}
-                >
-                  {isNyto ? "Manage experiences" : "View experiences"}
-                </Button>
-                <Button
-                  variant="secondary"
-                  className="w-full"
-                  onClick={() => setTab("contacts")}
-                >
-                  Venue contacts
-                </Button>
+            <div className="space-y-4">
+              <div className="nyto-panel h-fit p-5">
+                <h3 className="text-[15px] font-semibold text-ink">
+                  Next move
+                </h3>
+                <p className="mt-1 text-[13px] leading-relaxed text-text-muted">
+                  {isNyto
+                    ? "Publish a night, then lock floor contacts for service."
+                    : "View-only. Packages are created by the venue — admin cannot publish nights here."}
+                </p>
+                <div className="mt-4 flex flex-col gap-2">
+                  {isNyto ? (
+                    <Button
+                      className="w-full"
+                      onClick={() => setTab("experiences")}
+                    >
+                      Publish experience
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      className="w-full"
+                      onClick={() => setTab("experiences")}
+                    >
+                      View synced packages
+                    </Button>
+                  )}
+                  <Button
+                    variant="secondary"
+                    className="w-full"
+                    onClick={() => setTab("contacts")}
+                  >
+                    Manage contacts
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -293,14 +391,12 @@ function EditVenueForm({
   venueId,
   mockMode,
   hostedBy,
-  onHostedByChange,
   initial,
   onSaved,
 }: {
   venueId: string;
   mockMode: boolean;
   hostedBy: HostedBy;
-  onHostedByChange: (next: HostedBy) => void;
   initial: { name: string; address: string; city: string; area: string };
   onSaved: () => void;
 }) {
@@ -331,19 +427,19 @@ function EditVenueForm({
     setBusy(true);
     try {
       if (mockMode) {
-        setOk("Venue details saved (mock).");
+        setOk("Saved — synced to the NYTO guest app (demo).");
         return;
       }
       const token = await getToken();
       if (!token) throw new ApiError("Session expired.", 401);
-      // hostedBy persists on frontend until backend field ships
+      // Never change hostedBy here — Partner vs NYTO is locked at create / host approval.
       await patchVenue(token, venueId, {
         name: name.trim(),
         address: address.trim(),
         city: city.trim(),
         area: area.trim() || undefined,
       });
-      setOk("Venue details saved.");
+      setOk("Saved — synced to the NYTO guest app.");
       onSaved();
     } catch (err) {
       setOk(null);
@@ -358,8 +454,13 @@ function EditVenueForm({
       <div>
         <h3 className="text-[15px] font-semibold text-ink">Venue details</h3>
         <p className="mt-1 text-[13px] text-text-muted">
-          Name, location, and who organises nights here.
+          Name and location only. Who organises is locked.
         </p>
+      </div>
+      <div className="flex items-center gap-2 rounded-xl border border-border bg-bg-elevated px-3 py-2.5">
+        <span className="text-[12px] text-text-faint">Organised by</span>
+        <HostedByBadge value={hostedBy} />
+        <span className="text-[11px] text-text-faint">· locked</span>
       </div>
       <div>
         <Label>Name</Label>
@@ -379,21 +480,6 @@ function EditVenueForm({
           <Input value={area} onChange={(e) => setArea(e.target.value)} />
         </div>
       </div>
-      <div>
-        <Label>Organised by</Label>
-        <Select
-          value={hostedBy}
-          onChange={(e) => onHostedByChange(e.target.value as HostedBy)}
-        >
-          <option value="NYTO">NYTO curated</option>
-          <option value="PARTNER">Partner venue</option>
-        </Select>
-        <p className="mt-1.5 text-[12px] leading-relaxed text-text-faint">
-          {hostedBy === "NYTO"
-            ? "Admin creates experiences and nights for this venue."
-            : "Venue publishes packages on the platform. NYTO takes a share."}
-        </p>
-      </div>
       <FieldError message={error} />
       {ok ? <p className="text-[13px] font-medium text-success">{ok}</p> : null}
       <Button type="submit" disabled={busy}>
@@ -412,6 +498,9 @@ type ExperienceRow = {
   categories: ExperienceCategory[];
   when: string;
   capacity?: number;
+  status?: "OPEN" | "FULL" | "CANCELLED";
+  tableId?: string;
+  fromVenueDashboard?: boolean;
 };
 
 function ExperiencesPanel({
@@ -428,45 +517,111 @@ function ExperiencesPanel({
   onChanged: () => void;
 }) {
   const { getToken } = useAuth();
-  const defaults = loadConsoleSettings();
   const [rows, setRows] = useState(initial);
+  const [syncNote, setSyncNote] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
-  const [cost, setCost] = useState(String(defaults.defaultSeatPrice));
+  const [cost, setCost] = useState("");
   const [diet, setDiet] = useState("NON_VEGETARIAN");
   const [categories, setCategories] = useState<ExperienceCategory[]>([
     "WEEKLY",
   ]);
   const [startsAt, setStartsAt] = useState("");
-  const [capacity, setCapacity] = useState(String(defaults.defaultCapacity));
+  const [capacity, setCapacity] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Partner venues: never publish / cancel from admin — venue dashboard only.
   const canEdit = hostedBy === "NYTO";
 
-  useEffect(() => setRows(initial), [initial]);
+  useEffect(() => {
+    const stored = loadVenueNights(venueId);
+    if (stored.length > 0) {
+      setRows(
+        stored.map((n) => ({
+          id: n.id,
+          name: n.name,
+          diet: n.diet,
+          cost: n.cost,
+          costPerHead: n.costPerHead,
+          categories: n.categories,
+          when: n.when,
+          capacity: n.capacity,
+          status: n.status,
+          tableId: n.tableId,
+          fromVenueDashboard: hostedBy === "PARTNER",
+        })),
+      );
+      return;
+    }
+    setRows(initial);
+    if (initial.length > 0) {
+      saveVenueNights(
+        venueId,
+        initial.map(
+          (r): StoredNight => ({
+            id: r.id,
+            name: r.name,
+            diet: r.diet,
+            cost: r.cost,
+            costPerHead: r.costPerHead ?? 0,
+            categories: r.categories,
+            when: r.when,
+            capacity: r.capacity ?? 6,
+            status: r.status ?? "OPEN",
+            tableId: r.tableId,
+          }),
+        ),
+      );
+    }
+  }, [initial, venueId, hostedBy]);
+
+  function persistRows(next: ExperienceRow[]) {
+    setRows(next);
+    saveVenueNights(
+      venueId,
+      next.map(
+        (r): StoredNight => ({
+          id: r.id,
+          name: r.name,
+          diet: r.diet,
+          cost: r.cost,
+          costPerHead: r.costPerHead ?? 0,
+          categories: r.categories,
+          when: r.when,
+          capacity: r.capacity ?? 6,
+          status: r.status ?? "OPEN",
+          tableId: r.tableId,
+        }),
+      ),
+    );
+  }
 
   function resetForm() {
     setEditingId(null);
     setName("");
-    setCost(String(defaults.defaultSeatPrice));
+    setCost("");
     setDiet("NON_VEGETARIAN");
     setCategories(["WEEKLY"]);
     setStartsAt("");
-    setCapacity(String(defaults.defaultCapacity));
+    setCapacity("");
     setError(null);
   }
 
   function startEdit(row: ExperienceRow) {
-    if (!canEdit) return;
+    if (!canEdit || row.status === "CANCELLED") return;
     setEditingId(row.id);
     setName(row.name);
-    setCost(String(row.costPerHead ?? defaults.defaultSeatPrice));
+    setCost(
+      row.costPerHead != null && Number.isFinite(row.costPerHead)
+        ? String(row.costPerHead)
+        : "",
+    );
     setDiet(row.diet);
     setCategories(
       row.categories.length > 0 ? [...row.categories] : ["WEEKLY"],
     );
-    setCapacity(String(row.capacity ?? defaults.defaultCapacity));
+    setCapacity(row.capacity != null ? String(row.capacity) : "");
     setStartsAt("");
     setError(null);
   }
@@ -478,15 +633,20 @@ function ExperiencesPanel({
       .toLocaleString("en-GB", {
         day: "numeric",
         month: "short",
-        hour: "numeric",
+        hour: "2-digit",
         minute: "2-digit",
-        hour12: true,
+        hour12: false,
+        timeZone: "Asia/Kolkata",
       })
       .replace(",", " ·");
   }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (hostedBy !== "NYTO") {
+      setError("Partner venues publish nights in their own dashboard — not from admin.");
+      return;
+    }
     if (!canEdit) return;
     if (!name.trim()) {
       setError("Name is required.");
@@ -500,22 +660,34 @@ function ExperiencesPanel({
       setError("Pick a start time for this night.");
       return;
     }
+    const costPerHead = Number(cost);
+    if (!Number.isFinite(costPerHead) || costPerHead < 0) {
+      setError("Seat price must be a valid number.");
+      return;
+    }
+    const cap = Number(capacity);
+    if (!Number.isFinite(cap) || cap < 2 || cap > 12) {
+      setError("Capacity must be between 2 and 12.");
+      return;
+    }
     setError(null);
+    setSyncNote(null);
     setBusy(true);
     try {
       const whenLabel = startsAt ? formatWhenLabel(startsAt) : undefined;
-      const cap = Number(capacity) || defaults.defaultCapacity;
+      const costLabel = `₹${costPerHead.toLocaleString("en-IN")}`;
+
       if (mockMode) {
         if (editingId) {
-          setRows((prev) =>
-            prev.map((r) =>
+          persistRows(
+            rows.map((r) =>
               r.id === editingId
                 ? {
                     ...r,
                     name: name.trim(),
                     diet,
-                    cost: `₹${Number(cost).toLocaleString("en-IN")}`,
-                    costPerHead: Number(cost) || 0,
+                    cost: costLabel,
+                    costPerHead,
                     categories: [...categories],
                     when: whenLabel ?? r.when,
                     capacity: cap,
@@ -524,33 +696,86 @@ function ExperiencesPanel({
             ),
           );
         } else {
-          setRows((prev) => [
-            {
-              id: `e-${Date.now()}`,
-              name: name.trim(),
-              diet,
-              cost: `₹${Number(cost).toLocaleString("en-IN")}`,
-              costPerHead: Number(cost) || 0,
-              categories: [...categories],
-              when: whenLabel || "—",
-              capacity: cap,
-            },
-            ...prev,
-          ]);
+          const night: ExperienceRow = {
+            id: `e-${Date.now()}`,
+            name: name.trim(),
+            diet,
+            cost: costLabel,
+            costPerHead,
+            categories: [...categories],
+            when: whenLabel || "—",
+            capacity: cap,
+            status: "OPEN",
+          };
+          persistRows([night, ...rows]);
         }
+        setSyncNote("Synced to guest app (demo).");
         resetForm();
         return;
       }
+
       const token = await getToken();
       if (!token) throw new ApiError("Session expired.", 401);
       const body = {
         name: name.trim(),
         dietaryType: diet as "VEGETARIAN" | "NON_VEGETARIAN" | "VEGAN",
-        costPerHead: Number(cost) || 0,
+        costPerHead,
       };
-      if (editingId) await patchVenueMenu(token, editingId, body);
-      else await createVenueMenu(token, venueId, body);
-      // Categories + schedule persist when backend ships; refresh core menu list.
+
+      if (editingId) {
+        await patchVenueMenu(token, editingId, body);
+        const existing = rows.find((r) => r.id === editingId);
+        upsertVenueNight(venueId, {
+          id: editingId,
+          name: name.trim(),
+          diet,
+          cost: costLabel,
+          costPerHead,
+          categories: [...categories],
+          when: whenLabel ?? existing?.when ?? "—",
+          startsAtIso: startsAt
+            ? toIsoFromLocalDatetime(startsAt)
+            : undefined,
+          capacity: cap,
+          status: existing?.status ?? "OPEN",
+          tableId: existing?.tableId,
+          menuId: editingId,
+        });
+        setSyncNote("Saved — live on the NYTO app.");
+        resetForm();
+        onChanged();
+        return;
+      }
+
+      const menuRes = await createVenueMenu(token, venueId, body);
+      const tableRes = await createVenueTable(token, venueId, {
+        startsAt: toIsoFromLocalDatetime(startsAt),
+        seatPrice: costPerHead,
+        capacity: cap,
+        priceTier: priceTierFromLocalDatetime(startsAt),
+        tableType: categories[0],
+        menuId: menuRes.menu.id,
+        status: "OPEN",
+        hostedBy: "NYTO",
+        inclusions: categories.map(categoryLabel),
+      });
+
+      upsertVenueNight(venueId, {
+        id: menuRes.menu.id,
+        menuId: menuRes.menu.id,
+        tableId: tableRes.table.id,
+        name: name.trim(),
+        diet,
+        cost: costLabel,
+        costPerHead,
+        categories: [...categories],
+        when: whenLabel || "—",
+        startsAtIso: toIsoFromLocalDatetime(startsAt),
+        capacity: cap,
+        status: "OPEN",
+      });
+
+      setSyncNote("Published — synced to the NYTO guest app.");
       resetForm();
       onChanged();
     } catch (err) {
@@ -566,50 +791,64 @@ function ExperiencesPanel({
     }
   }
 
-  async function onDelete(id: string) {
-    if (!canEdit) return;
-    if (!window.confirm("Delete this experience?")) return;
+  async function onCancelNight(row: ExperienceRow) {
+    if (hostedBy !== "NYTO" || !canEdit) return;
+    if (row.status === "CANCELLED") return;
+    if (
+      !confirmDestructive(
+        "Cancel this NYTO night? Open bookings will be cancelled where the API supports it.",
+      )
+    ) {
+      return;
+    }
     setError(null);
     try {
       if (mockMode) {
-        setRows((prev) => prev.filter((r) => r.id !== id));
-        if (editingId === id) resetForm();
+        persistRows(
+          rows.map((r) =>
+            r.id === row.id ? { ...r, status: "CANCELLED" } : r,
+          ),
+        );
+        setSyncNote("Night cancelled — guest app updated (demo).");
         return;
       }
       const token = await getToken();
       if (!token) throw new ApiError("Session expired.", 401);
-      await deleteVenueMenu(token, id);
-      if (editingId === id) resetForm();
+      if (row.tableId) {
+        await cancelTable(token, row.tableId, "Cancelled by NYTO admin");
+      } else {
+        await deleteVenueMenu(token, row.id);
+      }
+      persistRows(
+        rows.map((r) =>
+          r.id === row.id ? { ...r, status: "CANCELLED" } : r,
+        ),
+      );
+      setSyncNote("Night cancelled — synced to the guest app.");
       onChanged();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not delete experience.",
-      );
+      setError(err instanceof Error ? err.message : "Could not cancel night.");
     }
   }
 
   return (
     <div
-      className={`grid gap-6 ${canEdit ? "lg:grid-cols-[1fr_340px]" : ""}`}
+      className={`grid gap-5 ${canEdit ? "lg:grid-cols-[minmax(0,1fr)_320px]" : ""}`}
     >
-      <div className="space-y-4">
-        {!canEdit ? (
-          <div className="rounded-xl border border-border bg-bg-elevated px-4 py-3.5 text-[13px] leading-relaxed text-text-muted">
-            <p className="font-semibold text-ink">Partner hosted venue</p>
-            <p className="mt-1">
-              This venue organises its own nights on NYTO. Experiences and
-              pricing are managed by them — we take the platform share. Admin
-              can view only.
-            </p>
-          </div>
+      <div className="space-y-3">
+        {!canEdit ? <PartnerHostedReadNote /> : null}
+        {syncNote ? (
+          <p className="rounded-xl border border-success/25 bg-success/[0.07] px-3.5 py-2.5 text-[13px] font-medium text-success">
+            {syncNote}
+          </p>
         ) : null}
 
         <div className="nyto-panel overflow-hidden">
           {rows.length === 0 ? (
-            <div className="px-5 py-10 text-center text-[14px] text-text-muted">
+            <div className="px-5 py-12 text-center text-[14px] text-text-muted">
               {canEdit
-                ? "No experiences yet. Publish a NYTO curated night to get started."
-                : "No experiences synced yet. Packages appear here when the venue publishes."}
+                ? "No nights yet. Publish on the right — it syncs to the guest app."
+                : "Nothing synced yet. Partner packages appear when the venue publishes."}
             </div>
           ) : (
             <div className="nyto-table-wrap">
@@ -621,14 +860,19 @@ function ExperiencesPanel({
                     <th>Diet</th>
                     <th>When</th>
                     <th>Seats</th>
-                    <th>Cost / head</th>
-                    {canEdit ? <th /> : null}
+                    <th>Cost</th>
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((m) => (
                     <tr key={m.id}>
-                      <td className="font-medium text-ink">{m.name}</td>
+                      <td>
+                        <div className="font-medium text-ink">{m.name}</div>
+                        {m.status === "CANCELLED" ? (
+                          <Badge tone="danger">Cancelled</Badge>
+                        ) : null}
+                      </td>
                       <td>
                         <div className="flex flex-wrap gap-1">
                           {m.categories.length === 0 ? (
@@ -645,31 +889,41 @@ function ExperiencesPanel({
                       <td className="text-text-muted">
                         {statusLabel(m.diet)}
                       </td>
-                      <td className="text-text-muted">{m.when}</td>
+                      <td className="whitespace-nowrap text-text-muted">
+                        {m.when}
+                      </td>
                       <td className="tabular-nums text-text-muted">
                         {m.capacity ?? "—"}
                       </td>
                       <td className="tabular-nums">{m.cost}</td>
-                      {canEdit ? (
-                        <td className="text-right">
-                          <div className="flex justify-end gap-3">
-                            <button
-                              type="button"
-                              onClick={() => startEdit(m)}
-                              className="text-[13px] font-semibold text-accent hover:underline"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void onDelete(m.id)}
-                              className="text-[13px] font-semibold text-danger hover:underline"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      ) : null}
+                      <td className="text-right">
+                        {canEdit ? (
+                          m.status !== "CANCELLED" ? (
+                            <div className="flex justify-end gap-3">
+                              <button
+                                type="button"
+                                onClick={() => startEdit(m)}
+                                className="text-[13px] font-semibold text-accent hover:underline"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void onCancelNight(m)}
+                                className="text-[13px] font-semibold text-danger hover:underline"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[12px] text-text-faint">—</span>
+                          )
+                        ) : (
+                          <span className="text-[12px] text-text-faint">
+                            Venue-run
+                          </span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -682,9 +936,11 @@ function ExperiencesPanel({
       {canEdit ? (
         <form onSubmit={onSubmit} className="nyto-panel h-fit space-y-3.5 p-5">
           <h3 className="text-[15px] font-semibold text-ink">
-            {editingId ? "Edit NYTO experience" : "Publish NYTO curated night"}
+            {editingId ? "Edit night" : "Publish NYTO night"}
           </h3>
-          <NytoCuratedCreateNote />
+          <p className="text-[12px] leading-relaxed text-text-faint">
+            Save publishes to the guest app on the same network.
+          </p>
           <div>
             <Label>Name</Label>
             <Input
@@ -712,10 +968,7 @@ function ExperiencesPanel({
           </div>
           <div>
             <Label>Categories</Label>
-            <p className="mb-2 text-[12px] text-text-faint">
-              Multi-select — same types as the NYTO guest app.
-            </p>
-            <div className="flex flex-wrap gap-2">
+            <div className="mt-1.5 flex flex-wrap gap-2">
               {EXPERIENCE_CATEGORIES.map((c) => {
                 const on = categories.includes(c.id);
                 return (
@@ -726,7 +979,7 @@ function ExperiencesPanel({
                     onClick={() =>
                       setCategories((prev) => toggleCategory(prev, c.id))
                     }
-                    className={`rounded-lg border px-3 py-1.5 text-[13px] font-semibold transition ${
+                    className={`rounded-lg border px-2.5 py-1.5 text-[12px] font-semibold transition ${
                       on
                         ? "border-accent bg-[var(--accent-wash)] text-accent-soft"
                         : "border-border bg-bg-elevated text-text-muted hover:text-text"
@@ -745,11 +998,6 @@ function ExperiencesPanel({
               value={startsAt}
               onChange={(e) => setStartsAt(e.target.value)}
             />
-            {editingId ? (
-              <p className="mt-1 text-[12px] text-text-faint">
-                Leave blank to keep the current start time.
-              </p>
-            ) : null}
           </div>
           <div>
             <Label>Capacity</Label>
@@ -764,10 +1012,10 @@ function ExperiencesPanel({
           <FieldError message={error} />
           <Button type="submit" className="w-full" disabled={busy}>
             {busy
-              ? "Saving…"
+              ? "Publishing…"
               : editingId
-                ? "Save changes"
-                : "Publish night"}
+                ? "Save + sync"
+                : "Publish + sync to app"}
           </Button>
           {editingId ? (
             <Button
@@ -809,7 +1057,9 @@ function ContactsPanel({
       return;
     }
     if (mockMode) {
-      setRows(MOCK_VENUE_CONTACTS.map((c) => ({ ...c })));
+      const seeded = MOCK_VENUE_CONTACTS.map((c) => ({ ...c }));
+      setRows(seeded);
+      saveVenueContacts(venueId, seeded);
       return;
     }
     setRows([]);

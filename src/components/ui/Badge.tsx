@@ -38,9 +38,11 @@ export function statusTone(status: string): keyof typeof toneClass {
   ) {
     return "success";
   }
-  if (
-    ["CANCELLED", "FAILED", "REFUNDED", "REJECTED", "NO_SHOW"].includes(s)
-  ) {
+  // Terminal / settled states stay muted — not alarm red.
+  if (["CANCELLED", "REFUNDED", "NO_SHOW"].includes(s)) {
+    return "neutral";
+  }
+  if (["FAILED", "REJECTED"].includes(s)) {
     return "danger";
   }
   if (

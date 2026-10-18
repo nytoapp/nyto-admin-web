@@ -290,7 +290,7 @@ textarea {
 }
 
 .nyto-table td {
-  padding: 14px;
+  padding: 12px 14px;
   border-top: 1px solid var(--border-subtle);
   vertical-align: middle;
 }
@@ -352,4 +352,161 @@ html[data-compact-tables="true"] .nyto-table th {
 html[data-compact-tables="true"] .nyto-table td {
   padding-top: 10px;
   padding-bottom: 10px;
+}
+
+/* —— Bookings: top-tier motion & sheen —— */
+@keyframes nyto-sheen-sweep {
+  0% {
+    transform: translateX(-120%) skewX(-12deg);
+    opacity: 0;
+  }
+  35% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translateX(220%) skewX(-12deg);
+    opacity: 0;
+  }
+}
+
+@keyframes nyto-live-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(77, 139, 255, 0.35);
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(77, 139, 255, 0);
+    opacity: 0.85;
+  }
+}
+
+@keyframes nyto-amount-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  50% {
+    filter: drop-shadow(0 8px 18px rgba(77, 139, 255, 0.18));
+  }
+}
+
+.nyto-bookings-hero {
+  position: relative;
+  isolation: isolate;
+}
+
+.nyto-bookings-hero::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.06) 50%,
+    transparent 60%
+  );
+  width: 45%;
+  animation: nyto-sheen-sweep 4.8s ease-in-out 0.6s infinite;
+}
+
+.nyto-bookings-stat {
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 220ms ease,
+    background 220ms ease;
+}
+
+.nyto-bookings-stat:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.nyto-bookings-row {
+  position: relative;
+  transition:
+    background 160ms ease,
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.nyto-bookings-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12%;
+  bottom: 12%;
+  width: 2px;
+  border-radius: 2px;
+  background: transparent;
+  transition: background 180ms ease;
+}
+
+.nyto-bookings-row:hover {
+  transform: translateX(3px);
+}
+
+.nyto-bookings-row:hover::before {
+  background: var(--accent);
+}
+
+.nyto-bookings-arrow {
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 180ms ease,
+    opacity 180ms ease;
+  opacity: 0.35;
+}
+
+.nyto-bookings-row:hover .nyto-bookings-arrow {
+  transform: translateX(4px);
+  color: var(--accent-soft);
+  opacity: 1;
+}
+
+.nyto-live-dot {
+  animation: nyto-live-breathe 2.4s ease-in-out infinite;
+}
+
+.nyto-amount-hero {
+  background: linear-gradient(180deg, #f8fafc 0%, #c7d4ef 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: nyto-amount-glow 5s ease-in-out infinite;
+}
+
+.nyto-dossier {
+  animation: nyto-rise 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: 80ms;
+}
+
+.nyto-venue-strip {
+  animation: nyto-rise 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: 140ms;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.nyto-venue-strip:hover {
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nyto-bookings-hero::after,
+  .nyto-live-dot,
+  .nyto-amount-hero,
+  .nyto-dossier,
+  .nyto-venue-strip {
+    animation: none !important;
+  }
+
+  .nyto-bookings-row:hover,
+  .nyto-bookings-stat:hover,
+  .nyto-venue-strip:hover {
+    transform: none;
+  }
 }
