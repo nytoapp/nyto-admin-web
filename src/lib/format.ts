@@ -5,7 +5,7 @@ const STATUS_LABELS: Record<string, string> = {
   CLOSED: "Closed",
   CANCELLED: "Cancelled",
   DRAFT: "Draft",
-  PENDING_PAYMENT: "Pending payment",
+  PENDING_PAYMENT: "Awaiting payment",
   CONFIRMED: "Confirmed",
   COMPLETED: "Completed",
   ATTENDED: "Attended",
@@ -20,10 +20,10 @@ const STATUS_LABELS: Record<string, string> = {
   REFUNDED: "Refunded",
   PENDING: "Pending",
   REJECTED: "Rejected",
+  INVITED: "Invited",
   ACTIVE: "Active",
   INACTIVE: "Inactive",
   NEW: "New",
-  INVITED: "Invited",
   OWNER: "Owner",
   MANAGER: "Manager",
   STAFF: "Staff",
@@ -84,6 +84,28 @@ export function formatWhen(
   const date = new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
     month: "short",
+    timeZone: TIMEZONE,
+  }).format(d);
+  const time = new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: TIMEZONE,
+  }).format(d);
+  return `${date} · ${time}`;
+}
+
+/** e.g. 5 Dec 2026 · 20:00 — use when year must be unambiguous. */
+export function formatWhenWithYear(
+  value: string | Date | null | undefined,
+): string {
+  if (!value) return "—";
+  const d = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(d.getTime())) return "—";
+  const date = new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
     timeZone: TIMEZONE,
   }).format(d);
   const time = new Intl.DateTimeFormat("en-GB", {

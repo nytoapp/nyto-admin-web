@@ -15,6 +15,7 @@ import {
 } from "@/lib/api/team";
 import { statusLabel } from "@/lib/format";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
+import { teamKpis } from "@/lib/kpi";
 import { MOCK_TEAM } from "@/lib/mock/data";
 import { useAuth } from "@/providers/auth-provider";
 
@@ -42,8 +43,7 @@ export default function TeamPage() {
   }, [data]);
 
   const members = mockMode ? (rows ?? MOCK_TEAM) : (rows ?? data ?? []);
-  const invited = members.filter((m) => m.status === "INVITED").length;
-  const active = members.filter((m) => m.status === "ACTIVE").length;
+  const kpi = teamKpis(members);
 
   async function onInvite(e: FormEvent) {
     e.preventDefault();
@@ -122,13 +122,28 @@ export default function TeamPage() {
         title="Team"
         description="People with full NYTO Admin access — invite by work email, revoke anytime."
         stats={[
-          { label: "Members", value: String(members.length) },
-          { label: "Active", value: String(active), soft: true },
-          { label: "Invited", value: String(invited), soft: true },
           {
-            label: "You",
+            label: "Active admins",
+            value: String(kpi.activeAdmins),
+            hint: "ADMIN · signed in at least once",
+          },
+          {
+            label: "Pending invitations",
+            value: String(kpi.pendingInvitations),
+            soft: true,
+            hint: "Invited · not yet active",
+          },
+          {
+            label: "Team size",
+            value: String(kpi.teamSize),
+            soft: true,
+            hint: "Active admins + pending invitations",
+          },
+          {
+            label: "Signed in as",
             value: user?.email?.split("@")[0] ?? "—",
             soft: true,
+            hint: "Session identity · not a KPI",
           },
         ]}
       />

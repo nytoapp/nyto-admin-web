@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Badge, statusTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Field";
@@ -25,10 +26,23 @@ import {
 import { listVenues } from "@/lib/api/venues";
 import { statusLabel } from "@/lib/format";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
+import { hostApplicationKpis } from "@/lib/kpi";
 import { MOCK_HOST_APPS } from "@/lib/mock/data";
 import { useAuth } from "@/providers/auth-provider";
 
 type StatusFilter = "PENDING" | "APPROVED" | "REJECTED" | "ALL";
+
+function parseHostStatus(raw: string | null): StatusFilter {
+  if (
+    raw === "PENDING" ||
+    raw === "APPROVED" ||
+    raw === "REJECTED" ||
+    raw === "ALL"
+  ) {
+    return raw;
+  }
+  return "PENDING";
+}
 
 type HostRow = {
   id: string;
@@ -67,23 +81,28 @@ function mapHost(a: HostApplication): HostRow {
 }
 
 export default function HostApplicationsPage() {
+  const searchParams = useSearchParams();
   const { mockMode, getToken } = useAuth();
-  const [status, setStatus] = useState<StatusFilter>("PENDING");
+  const [status, setStatus] = useState<StatusFilter>(() =>
+    parseHostStatus(searchParams.get("status")),
+  );
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setStatus(parseHostStatus(searchParams.get("status")));
+  }, [searchParams]);
   const [localRows, setLocalRows] = useState<HostRow[] | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [linkVenueId, setLinkVenueId] = useState<Record<string, string>>({});
 
-  const apiStatus = status === "ALL" ? "ALL" : status;
-
+  /** Always load full ledger so KPI cards stay accurate across tabs. */
   const { data, loading, error, reload } = useAdminResource(
     !mockMode,
     async (token) => {
-      const res = await listHostApplications(token, apiStatus);
+      const res = await listHostApplications(token, "ALL");
       return res.applications.map(mapHost);
     },
-    [apiStatus],
   );
 
   const venues = useAdminResource(!mockMode, async (token) => {
@@ -93,10 +112,6 @@ export default function HostApplicationsPage() {
       label: `${v.name}${v.area ? ` · ${v.area}` : ""}`,
     }));
   });
-
-  useEffect(() => {
-    setLocalRows(null);
-  }, [apiStatus]);
 
   const rows = useMemo(() => {
     if (localRows) return localRows;
@@ -116,12 +131,9 @@ export default function HostApplicationsPage() {
   }, [localRows, mockMode, data]);
 
   const filtered = useMemo(() => {
-    if (mockMode) {
-      if (status === "ALL") return rows;
-      return rows.filter((r) => r.status === status);
-    }
-    return rows;
-  }, [mockMode, rows, status]);
+    if (status === "ALL") return rows;
+    return rows.filter((r) => r.status === status);
+  }, [rows, status]);
 
   async function onApprove(id: string) {
     setBusyId(id);
@@ -173,26 +185,31 @@ export default function HostApplicationsPage() {
     }
   }
 
-  const pendingCount = filtered.filter((r) => r.status === "PENDING").length;
+  const kpi = hostApplicationKpis(rows);
 
   return (
     <div className="nyto-fade">
       <ModuleHero
         eyebrow="Network"
         title="Host applications"
-        description="Leads from nightai.com / socials (venue name, official email, mobile) land here. Enquire, then approve into a partner venue — login goes to that email."
+        description="Venue-organized onboarding queue. Approve creates a Venue-organized venue and owner — not counted as a venue until that succeeds."
         stats={[
-          { label: "In view", value: String(filtered.length) },
-          { label: "Pending", value: String(pendingCount), soft: true },
+          {
+            label: "Awaiting review",
+            value: String(kpi.awaitingReview),
+            hint: "PENDING · actionable work",
+          },
           {
             label: "Approved",
-            value: String(filtered.filter((r) => r.status === "APPROVED").length),
+            value: String(kpi.approved),
             soft: true,
+            hint: "Applications · not venue count",
           },
           {
             label: "Rejected",
-            value: String(filtered.filter((r) => r.status === "REJECTED").length),
+            value: String(kpi.rejected),
             soft: true,
+            hint: "status = REJECTED",
           },
         ]}
       />
@@ -206,26 +223,46 @@ export default function HostApplicationsPage() {
       ) : null}
 
       <ModuleFilters>
-        <div className="flex flex-wrap gap-1" role="tablist" aria-label="Application status">
-          {(
-            [
-              ["PENDING", "Pending"],
-              ["APPROVED", "Approved"],
-              ["REJECTED", "Rejected"],
-              ["ALL", "All"],
-            ] as const
-          ).map(([id, label]) => (
-            <ModulePill
-              key={id}
-              active={status === id}
-              onClick={() => setStatus(id)}
-              label={label}
-            />
-          ))}
+        <div className="flex flex-wrap items-center gap-3">
+          <div
+            className="flex flex-wrap gap-1"
+            role="tablist"
+            aria-label="Application status"
+          >
+            {(
+              [
+                ["PENDING", "Awaiting review"],
+                ["APPROVED", "Approved"],
+                ["REJECTED", "Rejected"],
+                ["ALL", "All"],
+              ] as const
+            ).map(([id, label]) => (
+              <ModulePill
+                key={id}
+                active={status === id}
+                onClick={() => setStatus(id)}
+                label={label}
+                count={
+                  id === "ALL"
+                    ? kpi.totalLoaded
+                    : id === "PENDING"
+                      ? kpi.awaitingReview
+                      : id === "APPROVED"
+                        ? kpi.approved
+                        : kpi.rejected
+                }
+              />
+            ))}
+          </div>
+          <p className="text-[13px] tabular-nums text-text-faint lg:ml-auto">
+            {filtered.length}
+            <span className="text-text-faint/70"> applications in view</span>
+          </p>
         </div>
         <p className="mt-2.5 text-[12px] text-text-faint">
-          Approve creates a partner venue. Credentials / greeting go to their
-          official email — then they publish nights in the venue portal.
+          Approve creates a partner venue via API. Venue count on Venues only
+          updates after approval succeeds — then they publish in the venue
+          portal.
         </p>
       </ModuleFilters>
 

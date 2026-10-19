@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Badge, statusTone } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Field";
 import { HostedByBadge } from "@/components/ui/HostedBy";
@@ -19,9 +19,15 @@ import {
 import { statusLabel } from "@/lib/format";
 import type { HostedByFilter } from "@/lib/hosted-by";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
+import { bookingFeedKpis } from "@/lib/kpi";
 import { mapBookingRow, type BookingRow } from "@/lib/mappers";
 import { MOCK_BOOKINGS } from "@/lib/mock/data";
 import { useAuth } from "@/providers/auth-provider";
+
+/**
+ * `/admin/bookings` returns a capped list (backend take: 100).
+ * KPIs and status-tab counts are scoped to that loaded list — not all-time history.
+ */
 
 type StatusFilter =
   | "all"
@@ -33,18 +39,27 @@ type StatusFilter =
 
 type CategoryFilter = "all" | ExperienceCategory;
 
-const STATUS_TABS: { id: StatusFilter; label: string; hint: string }[] = [
-  { id: "all", label: "All", hint: "Full pipeline" },
-  {
-    id: "PENDING_PAYMENT",
-    label: "Pending",
-    hint: "Seat held — chasing payment",
-  },
-  { id: "CONFIRMED", label: "Confirmed", hint: "Paid / locked in" },
-  { id: "ATTENDED", label: "Attended", hint: "Checked in on the night" },
-  { id: "NO_SHOW", label: "No-show", hint: "Confirmed, didn’t arrive" },
-  { id: "CANCELLED", label: "Cancelled", hint: "Voided — often refunded" },
+const STATUS_TABS: { id: StatusFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "PENDING_PAYMENT", label: "Pending payment" },
+  { id: "CONFIRMED", label: "Confirmed" },
+  { id: "ATTENDED", label: "Attended" },
+  { id: "NO_SHOW", label: "No-show" },
+  { id: "CANCELLED", label: "Cancelled" },
 ];
+
+function parseStatusParam(raw: string | null): StatusFilter {
+  if (
+    raw === "PENDING_PAYMENT" ||
+    raw === "CONFIRMED" ||
+    raw === "CANCELLED" ||
+    raw === "ATTENDED" ||
+    raw === "NO_SHOW"
+  ) {
+    return raw;
+  }
+  return "all";
+}
 
 const POLL_MS = 8_000;
 
@@ -81,20 +96,26 @@ function statusDot(status: string): string {
   const s = status.toUpperCase();
   if (s === "CONFIRMED" || s === "ATTENDED") return "bg-success";
   if (s === "PENDING_PAYMENT") return "bg-warning";
-  if (s === "CANCELLED" || s === "NO_SHOW" || s === "REFUNDED")
-    return "bg-text-faint";
+  if (s === "CANCELLED" || s === "NO_SHOW") return "bg-text-faint";
   return "bg-accent";
 }
 
 export default function BookingsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { mockMode } = useAuth();
   const [q, setQ] = useState("");
-  const [status, setStatus] = useState<StatusFilter>("all");
+  const [status, setStatus] = useState<StatusFilter>(() =>
+    parseStatusParam(searchParams.get("status")),
+  );
   const [hostedBy, setHostedBy] = useState<HostedByFilter>("all");
   const [category, setCategory] = useState<CategoryFilter>("all");
   const [syncedAt, setSyncedAt] = useState<Date | null>(null);
   const [livePulse, setLivePulse] = useState(false);
+
+  useEffect(() => {
+    setStatus(parseStatusParam(searchParams.get("status")));
+  }, [searchParams]);
 
   const { data, loading, error, reload } = useAdminResource(
     !mockMode,
@@ -124,16 +145,13 @@ export default function BookingsPage() {
     if (data) setSyncedAt(new Date());
   }, [data]);
 
+  /** Full loaded list (capped API feed). KPIs + status tabs use this — not search filters. */
   const rows = useMemo(() => {
     if (mockMode) return mockBookingRows();
     return data ?? [];
   }, [mockMode, data]);
 
-  const pipeline = useMemo(() => {
-    const pending = rows.filter((b) => b.status === "PENDING_PAYMENT").length;
-    const confirmed = rows.filter((b) => b.status === "CONFIRMED").length;
-    return { pending, confirmed, total: rows.length };
-  }, [rows]);
+  const pipeline = useMemo(() => bookingFeedKpis(rows), [rows]);
 
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = { all: rows.length };
@@ -144,6 +162,7 @@ export default function BookingsPage() {
     return counts;
   }, [rows]);
 
+  /** Table rows: loaded list × search × organizing model × category × booking status. */
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return rows.filter((b) => {
@@ -167,10 +186,7 @@ export default function BookingsPage() {
     });
   }, [q, rows, status, hostedBy, category]);
 
-  const activeHint =
-    STATUS_TABS.find((t) => t.id === status)?.hint ??
-    "Guest reservations across the network.";
-
+  const kpisReady = mockMode || data != null;
   const syncLabel = syncedAt
     ? syncedAt.toLocaleTimeString("en-GB", {
         hour: "2-digit",
@@ -202,8 +218,8 @@ export default function BookingsPage() {
                 Bookings
               </h1>
               <p className="mt-3 max-w-xl text-[14px] leading-relaxed text-text-muted">
-                Live reservations across NYTO curated and partner nights —
-                guest, payment, and seat state in one feed.
+                Guest reservations. Booking status and payment status are
+                separate.
               </p>
             </div>
             <div
@@ -212,44 +228,51 @@ export default function BookingsPage() {
                   ? "border-accent/40 bg-[var(--accent-wash)] text-accent-soft"
                   : "border-border bg-bg/60 text-text-faint backdrop-blur"
               }`}
-              title="REST polling every 8s"
+              title="List refreshes every 8 seconds"
             >
               <span
                 className={`h-2 w-2 rounded-full ${
                   mockMode ? "bg-text-faint" : "bg-accent nyto-live-dot"
                 } ${livePulse ? "scale-110" : ""}`}
               />
-              {mockMode ? "DEMO" : "LIVE"}
+              {mockMode ? "DEMO" : "Updated"}
               <span className="text-text-faint">·</span>
               <span className="tabular-nums">{syncLabel}</span>
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="mt-6 grid grid-cols-3 gap-3">
             <PulseStat
-              label="In feed"
-              value={String(pipeline.total)}
+              label="Bookings in results"
+              value={kpisReady ? String(pipeline.totalBookings) : "—"}
               delay={40}
             />
             <PulseStat
-              label="Pending"
-              value={String(pipeline.pending)}
+              label="Confirmed in results"
+              value={kpisReady ? String(pipeline.confirmed) : "—"}
               soft
               delay={80}
             />
             <PulseStat
-              label="Confirmed"
-              value={String(pipeline.confirmed)}
+              label="Cancelled in results"
+              value={kpisReady ? String(pipeline.cancelled) : "—"}
               soft
               delay={120}
             />
-            <PulseStat
-              label="Showing"
-              value={`${filtered.length}`}
-              soft
-              delay={160}
-            />
           </div>
+          <p className="mt-3 text-[12px] text-text-faint">
+            Counts from the loaded booking list
+            {kpisReady ? (
+              <>
+                {" "}
+                ·{" "}
+                <span className="tabular-nums text-text-muted">
+                  {filtered.length}
+                </span>{" "}
+                shown after filters
+              </>
+            ) : null}
+          </p>
         </div>
       </div>
 
@@ -257,7 +280,10 @@ export default function BookingsPage() {
         <ErrorBanner message={error} onRetry={() => void reload()} />
       ) : null}
 
-      <div className="mb-4 rounded-2xl border border-border bg-bg-elevated/80 p-3 shadow-[var(--shadow-sm)] backdrop-blur-sm sm:p-3.5 nyto-rise" style={{ animationDelay: "60ms" }}>
+      <div
+        className="mb-4 rounded-2xl border border-border bg-bg-elevated/80 p-3 shadow-[var(--shadow-sm)] backdrop-blur-sm sm:p-3.5 nyto-rise"
+        style={{ animationDelay: "60ms" }}
+      >
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           <div className="min-w-0 flex-1 lg:max-w-[300px]">
             <Input
@@ -270,13 +296,13 @@ export default function BookingsPage() {
           <div
             className="flex rounded-xl border border-border bg-bg p-0.5"
             role="group"
-            aria-label="Organised by"
+            aria-label="Organized by"
           >
             {(
               [
                 ["all", "All"],
-                ["NYTO", "NYTO"],
-                ["PARTNER", "Partner"],
+                ["NYTO", "NYTO-organized"],
+                ["PARTNER", "Venue-organized"],
               ] as const
             ).map(([id, label]) => (
               <button
@@ -330,7 +356,6 @@ export default function BookingsPage() {
                 type="button"
                 role="tab"
                 aria-selected={on}
-                title={tab.hint}
                 onClick={() => setStatus(tab.id)}
                 className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-semibold transition ${
                   on
@@ -344,13 +369,12 @@ export default function BookingsPage() {
                     on ? "text-bg/70" : "text-text-faint"
                   }`}
                 >
-                  {count}
+                  {kpisReady ? count : "—"}
                 </span>
               </button>
             );
           })}
         </div>
-        <p className="mt-2.5 px-0.5 text-[12px] text-text-faint">{activeHint}</p>
       </div>
 
       {loading && !mockMode && !data ? (
@@ -364,18 +388,22 @@ export default function BookingsPage() {
           title={rows.length === 0 ? "No bookings yet" : "No matching bookings"}
           description={
             rows.length === 0
-              ? "When a guest books a night, it lands here with payment and seat state."
-              : "Try another search, host, category, or status."
+              ? "When a guest books a night, it appears here."
+              : "Try another search, organizing model, category, or status."
           }
         />
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-border bg-bg-elevated/50 shadow-[var(--shadow-sm)] nyto-rise" style={{ animationDelay: "100ms" }}>
-          <div className="hidden border-b border-border-subtle px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-faint lg:grid lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1.25fr)_72px_96px_132px_28px] lg:gap-3">
+        <div
+          className="overflow-hidden rounded-2xl border border-border bg-bg-elevated/50 shadow-[var(--shadow-sm)] nyto-rise"
+          style={{ animationDelay: "100ms" }}
+        >
+          <div className="hidden border-b border-border-subtle px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-faint lg:grid lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1.15fr)_72px_96px_100px_100px_28px] lg:gap-3">
             <span>Guest</span>
             <span>Night</span>
-            <span className="text-right">Seats</span>
+            <span className="text-right">Booked · cap</span>
             <span className="text-right">Amount</span>
-            <span className="text-right">State</span>
+            <span className="text-right">Booking</span>
+            <span className="text-right">Payment</span>
             <span />
           </div>
           <ul>
@@ -462,11 +490,8 @@ function BookingRow({
   booking: BookingRow;
   onOpen: () => void;
 }) {
-  const contact = b.phone !== "—" ? b.phone : b.email;
-  const nightLine = [
-    b.when,
-    b.tableType ? categoryLabel(b.tableType) : null,
-  ]
+  const contact = b.phone !== "—" ? b.phone : b.email !== "—" ? b.email : null;
+  const nightLine = [b.when, b.tableType ? categoryLabel(b.tableType) : null]
     .filter(Boolean)
     .join(" · ");
 
@@ -474,7 +499,7 @@ function BookingRow({
     <button
       type="button"
       onClick={onOpen}
-      className="nyto-bookings-row group grid w-full grid-cols-1 gap-2.5 px-4 py-3.5 text-left hover:bg-bg-hover/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--ring)] sm:px-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1.25fr)_72px_96px_132px_28px] lg:items-center lg:gap-3"
+      className="nyto-bookings-row group grid w-full grid-cols-1 gap-2.5 px-4 py-3.5 text-left hover:bg-bg-hover/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--ring)] sm:px-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1.15fr)_72px_96px_100px_100px_28px] lg:items-center lg:gap-3"
     >
       <div className="min-w-0">
         <div className="flex items-center gap-2.5">
@@ -488,7 +513,7 @@ function BookingRow({
           <HostedByBadge value={b.hostedBy} short />
         </div>
         <p className="mt-1 truncate pl-[18px] text-[12px] leading-none text-text-faint">
-          {contact}
+          {contact ?? "Contact unavailable"}
           {b.checkInCode ? (
             <span className="font-mono text-text-muted"> · {b.checkInCode}</span>
           ) : null}
@@ -503,28 +528,50 @@ function BookingRow({
           ) : null}
         </p>
         <p className="mt-0.5 truncate text-[12px] leading-tight text-text-faint">
-          {nightLine}
+          {nightLine || "Night unavailable"}
         </p>
       </div>
 
-      <p className="pl-[18px] text-[13px] tabular-nums leading-none text-text-muted lg:pl-0 lg:text-right">
-        {b.seats}
-        {b.capacity != null ? (
-          <span className="text-text-faint">/{b.capacity}</span>
-        ) : null}
+      <p
+        className="pl-[18px] text-[13px] tabular-nums leading-none text-text-muted lg:pl-0 lg:text-right"
+        title="Seats on this booking · night capacity when known"
+      >
+        {b.seats != null ? (
+          <>
+            <span className="text-ink">{b.seats}</span>
+            {b.capacity != null && b.capacity > 0 ? (
+              <span className="text-text-faint"> of {b.capacity}</span>
+            ) : (
+              <span className="text-text-faint">
+                {" "}
+                seat{b.seats === 1 ? "" : "s"}
+              </span>
+            )}
+          </>
+        ) : (
+          "—"
+        )}
       </p>
 
-      <p className="pl-[18px] text-[14px] font-semibold tabular-nums leading-none tracking-[-0.02em] text-ink lg:pl-0 lg:text-right">
+      <p
+        className="pl-[18px] text-[14px] font-semibold tabular-nums leading-none tracking-[-0.02em] text-ink lg:pl-0 lg:text-right"
+        title="Linked payment amount when available"
+      >
         {b.amount}
       </p>
 
-      <div className="flex flex-wrap items-center gap-1.5 pl-[18px] lg:justify-end lg:pl-0">
-        {b.paymentStatus && b.paymentStatus !== b.status ? (
+      <div className="pl-[18px] lg:flex lg:justify-end lg:pl-0">
+        <Badge tone={statusTone(b.status)}>{statusLabel(b.status)}</Badge>
+      </div>
+
+      <div className="pl-[18px] lg:flex lg:justify-end lg:pl-0">
+        {b.paymentStatus ? (
           <Badge tone={statusTone(b.paymentStatus)}>
             {statusLabel(b.paymentStatus)}
           </Badge>
-        ) : null}
-        <Badge tone={statusTone(b.status)}>{statusLabel(b.status)}</Badge>
+        ) : (
+          <span className="text-[12px] text-text-faint">—</span>
+        )}
       </div>
 
       <span

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { FieldError, Input, Label, Select } from "@/components/ui/Field";
 import {
   HostedByBadge,
-  PartnerHostedReadNote,
+  VenueOrganizedReadNote,
 } from "@/components/ui/HostedBy";
 import {
   ErrorBanner,
@@ -76,6 +76,7 @@ export default function VenueDetailPage() {
   const { mockMode, getToken } = useAuth();
   const [tab, setTab] = useState<Tab>("overview");
   const [toggling, setToggling] = useState(false);
+  const [toggleError, setToggleError] = useState<string | null>(null);
   const [localHostedBy, setLocalHostedBy] = useState<HostedBy | null>(null);
 
   const mockVenue =
@@ -94,12 +95,19 @@ export default function VenueDetailPage() {
         listVenueMenus(token, venueId),
         listVenueTables(token, venueId),
       ]);
+      const nowMs = Date.now();
+      const upcomingDiningNights = tablesRes.tables.filter((t) => {
+        const status = String(t.status ?? "").toUpperCase();
+        if (status === "CANCELLED" || status === "COMPLETED") return false;
+        const starts = new Date(t.startsAt).getTime();
+        return Number.isFinite(starts) && starts > nowMs;
+      }).length;
       return {
         venue: venueRes.venue,
         menus: menusRes.menus.map(mapExperienceRow),
-        openNights: tablesRes.tables.filter((t) => t.status === "OPEN").length,
-        nightCount: tablesRes.tables.filter((t) => t.status !== "CANCELLED")
-          .length,
+        tables: tablesRes.tables,
+        upcomingDiningNights,
+        experiencesCount: menusRes.menus.length,
       };
     },
     [venueId],
@@ -125,8 +133,7 @@ export default function VenueDetailPage() {
       }
     : data?.venue;
 
-  // Live API wins — never let a stale localStorage flip override Partner → NYTO
-  // (that was letting admin publish tables on partner kitchens).
+  // Live API wins — never let a stale localStorage flip override Venue-organized → NYTO.
   const hostedBy: HostedBy = resolveHostedBy(
     mockMode
       ? (localHostedBy ?? mockVenue.hostedBy)
@@ -134,15 +141,27 @@ export default function VenueDetailPage() {
   );
 
   async function toggleActive() {
-    if (!venue || mockMode) return;
+    if (!venue || mockMode || toggling) return;
+    const nextActive = !venue.isActive;
+    const confirmed = nextActive
+      ? confirmDestructive(
+          "Enable this venue? It will appear as active on the network.",
+        )
+      : confirmDestructive(
+          "Disable this venue? It will stop appearing as active. This does not cancel existing dining nights.",
+        );
+    if (!confirmed) return;
     setToggling(true);
+    setToggleError(null);
     try {
       const token = await getToken();
       if (!token) throw new ApiError("Session expired.", 401);
-      await patchVenue(token, venue.id, { isActive: !venue.isActive });
+      await patchVenue(token, venue.id, { isActive: nextActive });
       await reload();
-    } catch {
-      /* reload will surface state */
+    } catch (err) {
+      setToggleError(
+        err instanceof Error ? err.message : "Could not update venue status.",
+      );
     } finally {
       setToggling(false);
     }
@@ -185,14 +204,61 @@ export default function VenueDetailPage() {
         status: "OPEN" as const,
         fromVenueDashboard: !isNyto,
       }))
-    : (data?.menus ?? []).map((m) => ({
-        ...m,
-        categories: [] as ExperienceCategory[],
-        when: "—",
-        capacity: undefined as number | undefined,
-        status: "OPEN" as const,
-        fromVenueDashboard: !isNyto,
-      }));
+    : (() => {
+        const menus = data?.menus ?? [];
+        const tables = data?.tables ?? [];
+        if (tables.length > 0) {
+          return tables.map((t) => {
+            const menu = menus.find((m) => m.id === t.menuId);
+            const starts = new Date(t.startsAt);
+            const whenLabel = Number.isNaN(starts.getTime())
+              ? "Start time unavailable"
+              : starts
+                  .toLocaleString("en-GB", {
+                    day: "numeric",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: false,
+                    timeZone: "Asia/Kolkata",
+                  })
+                  .replace(",", " ·");
+            const status = String(t.status ?? "").toUpperCase();
+            return {
+              id: t.menuId || t.id,
+              name: menu?.name || t.menu?.name || "Experience",
+              diet:
+                menu?.diet ||
+                (t.menu?.dietaryType
+                  ? statusLabel(t.menu.dietaryType)
+                  : "Diet unavailable"),
+              cost: Number.isFinite(t.seatPrice)
+                ? `₹${t.seatPrice.toLocaleString("en-IN")}`
+                : (menu?.cost ?? "Price unavailable"),
+              costPerHead: Number.isFinite(t.seatPrice)
+                ? t.seatPrice
+                : menu?.costPerHead,
+              categories: [] as ExperienceCategory[],
+              when: whenLabel,
+              capacity: Number.isFinite(t.capacity) ? t.capacity : undefined,
+              status:
+                status === "CANCELLED"
+                  ? ("CANCELLED" as const)
+                  : ("OPEN" as const),
+              tableId: t.id,
+              fromVenueDashboard: !isNyto,
+            };
+          });
+        }
+        return menus.map((m) => ({
+          ...m,
+          categories: [] as ExperienceCategory[],
+          when: "No dining nights scheduled",
+          capacity: undefined as number | undefined,
+          status: "OPEN" as const,
+          fromVenueDashboard: !isNyto,
+        }));
+      })();
 
   return (
     <div className="nyto-fade">
@@ -238,6 +304,18 @@ export default function VenueDetailPage() {
       </div>
 
       {error ? <ErrorBanner message={error} onRetry={() => void reload()} /> : null}
+      {toggleError ? (
+        <ErrorBanner
+          message={toggleError}
+          onRetry={() => setToggleError(null)}
+        />
+      ) : null}
+
+      {!isNyto ? (
+        <div className="mb-5">
+          <VenueOrganizedReadNote />
+        </div>
+      ) : null}
 
       <div className="mb-6 flex flex-wrap gap-1 rounded-xl border border-border bg-bg-elevated/80 p-1">
         {(
@@ -264,100 +342,46 @@ export default function VenueDetailPage() {
 
       {tab === "overview" ? (
         <div className="space-y-5">
-          <div
-            className={`rounded-2xl border px-4 py-3.5 ${
-              isNyto
-                ? "border-accent/25 bg-[var(--accent-wash)]"
-                : "border-success/20 bg-success/[0.06]"
-            }`}
-          >
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-faint">
-              Operating mode
-            </p>
-            <p className="mt-1 text-[15px] font-semibold text-ink">
-              {isNyto ? "NYTO curated house" : "Partner hosted kitchen"}
-            </p>
-            <p className="mt-1 max-w-xl text-[13px] leading-relaxed text-text-muted">
-              {isNyto
-                ? "Admin publishes experiences — categories, diet, schedule, capacity."
-                : "Venue team creates packages in their dashboard. They sync here (view-only) and into the NYTO guest app. You take the platform share."}
-            </p>
-          </div>
-
           <div className="grid gap-3 sm:grid-cols-3">
             <StatCard
               label="Experiences"
-              value={String(experiences.length)}
+              value={String(
+                mockMode
+                  ? experiences.length
+                  : (data?.experiencesCount ?? experiences.length),
+              )}
               accent="accent"
             />
             <StatCard
-              label="Open nights"
+              label="Upcoming dining nights"
               value={String(
                 mockMode
-                  ? experiences.filter((e) => e.when !== "—").length
-                  : (data?.openNights ?? 0),
+                  ? experiences.filter(
+                      (e) => e.when !== "—" && e.status !== "CANCELLED",
+                    ).length
+                  : (data?.upcomingDiningNights ?? 0),
               )}
               accent="neutral"
             />
             <StatCard
               label="Contacts"
               value={String(contactCountForVenue(venueId, 0))}
-              hint="Shift managers on call"
               accent="success"
             />
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
-            <EditVenueForm
-              venueId={venueId}
-              mockMode={mockMode}
-              hostedBy={hostedBy}
-              initial={{
-                name: venue.name,
-                address: venue.address,
-                city: venue.city,
-                area: venue.area || "",
-              }}
-              onSaved={() => void reload()}
-            />
-            <div className="space-y-4">
-              <div className="nyto-panel h-fit p-5">
-                <h3 className="text-[15px] font-semibold text-ink">
-                  Next move
-                </h3>
-                <p className="mt-1 text-[13px] leading-relaxed text-text-muted">
-                  {isNyto
-                    ? "Publish a night, then lock floor contacts for service."
-                    : "View-only. Packages are created by the venue — admin cannot publish nights here."}
-                </p>
-                <div className="mt-4 flex flex-col gap-2">
-                  {isNyto ? (
-                    <Button
-                      className="w-full"
-                      onClick={() => setTab("experiences")}
-                    >
-                      Publish experience
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="secondary"
-                      className="w-full"
-                      onClick={() => setTab("experiences")}
-                    >
-                      View synced packages
-                    </Button>
-                  )}
-                  <Button
-                    variant="secondary"
-                    className="w-full"
-                    onClick={() => setTab("contacts")}
-                  >
-                    Manage contacts
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <EditVenueForm
+            venueId={venueId}
+            mockMode={mockMode}
+            hostedBy={hostedBy}
+            initial={{
+              name: venue.name,
+              address: venue.address,
+              city: venue.city,
+              area: venue.area || "",
+            }}
+            onSaved={() => void reload()}
+          />
         </div>
       ) : null}
 
@@ -401,6 +425,7 @@ function EditVenueForm({
   onSaved: () => void;
 }) {
   const { getToken } = useAuth();
+  const [editing, setEditing] = useState(false);
   const [name, setName] = useState(initial.name);
   const [address, setAddress] = useState(initial.address);
   const [city, setCity] = useState(initial.city);
@@ -410,14 +435,36 @@ function EditVenueForm({
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (editing) return;
     setName(initial.name);
     setAddress(initial.address);
     setCity(initial.city);
     setArea(initial.area);
-  }, [initial.name, initial.address, initial.city, initial.area]);
+  }, [initial.name, initial.address, initial.city, initial.area, editing]);
+
+  function startEdit() {
+    setName(initial.name);
+    setAddress(initial.address);
+    setCity(initial.city);
+    setArea(initial.area);
+    setError(null);
+    setOk(null);
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    setName(initial.name);
+    setAddress(initial.address);
+    setCity(initial.city);
+    setArea(initial.area);
+    setError(null);
+    setOk(null);
+    setEditing(false);
+  }
 
   async function onSave(e: FormEvent) {
     e.preventDefault();
+    if (busy) return;
     if (!name.trim() || !address.trim() || !city.trim()) {
       setError("Name, address, and city are required.");
       setOk(null);
@@ -427,19 +474,22 @@ function EditVenueForm({
     setBusy(true);
     try {
       if (mockMode) {
-        setOk("Saved — synced to the NYTO guest app (demo).");
+        setOk("Details saved.");
+        setEditing(false);
+        onSaved();
         return;
       }
       const token = await getToken();
       if (!token) throw new ApiError("Session expired.", 401);
-      // Never change hostedBy here — Partner vs NYTO is locked at create / host approval.
+      // hostedBy is never sent — organizing model is immutable here.
       await patchVenue(token, venueId, {
         name: name.trim(),
         address: address.trim(),
         city: city.trim(),
         area: area.trim() || undefined,
       });
-      setOk("Saved — synced to the NYTO guest app.");
+      setOk("Details saved.");
+      setEditing(false);
       onSaved();
     } catch (err) {
       setOk(null);
@@ -450,42 +500,106 @@ function EditVenueForm({
   }
 
   return (
-    <form onSubmit={onSave} className="nyto-panel space-y-3.5 p-5">
-      <div>
-        <h3 className="text-[15px] font-semibold text-ink">Venue details</h3>
-        <p className="mt-1 text-[13px] text-text-muted">
-          Name and location only. Who organises is locked.
-        </p>
+    <div className="nyto-panel space-y-3.5 p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-[15px] font-semibold text-ink">Venue details</h3>
+          <p className="mt-1 text-[13px] text-text-muted">
+            Name and location. Organizing model cannot be changed here.
+          </p>
+        </div>
+        {!editing ? (
+          <Button variant="secondary" onClick={startEdit}>
+            Edit details
+          </Button>
+        ) : null}
       </div>
-      <div className="flex items-center gap-2 rounded-xl border border-border bg-bg-elevated px-3 py-2.5">
-        <span className="text-[12px] text-text-faint">Organised by</span>
+
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-bg-elevated px-3 py-2.5">
+        <span className="text-[12px] text-text-faint">Organized by</span>
         <HostedByBadge value={hostedBy} />
-        <span className="text-[11px] text-text-faint">· locked</span>
       </div>
-      <div>
-        <Label>Name</Label>
-        <Input value={name} onChange={(e) => setName(e.target.value)} />
-      </div>
-      <div>
-        <Label>Address</Label>
-        <Input value={address} onChange={(e) => setAddress(e.target.value)} />
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <Label>City</Label>
-          <Input value={city} onChange={(e) => setCity(e.target.value)} />
-        </div>
-        <div>
-          <Label>Area</Label>
-          <Input value={area} onChange={(e) => setArea(e.target.value)} />
-        </div>
-      </div>
-      <FieldError message={error} />
-      {ok ? <p className="text-[13px] font-medium text-success">{ok}</p> : null}
-      <Button type="submit" disabled={busy}>
-        {busy ? "Saving…" : "Save details"}
-      </Button>
-    </form>
+
+      {editing ? (
+        <form onSubmit={onSave} className="space-y-3.5">
+          <div>
+            <Label>Name</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <Label>Address</Label>
+            <Input
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              required
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label>City</Label>
+              <Input
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <Label>Area</Label>
+              <Input value={area} onChange={(e) => setArea(e.target.value)} />
+            </div>
+          </div>
+          <FieldError message={error} />
+          {ok ? (
+            <p className="text-[13px] font-medium text-success">{ok}</p>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" disabled={busy}>
+              {busy ? "Saving…" : "Save changes"}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={busy}
+              onClick={cancelEdit}
+            >
+              Cancel
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <dl className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <dt className="text-[11px] text-text-faint">Name</dt>
+            <dd className="mt-0.5 text-[14px] font-medium text-ink">
+              {initial.name}
+            </dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className="text-[11px] text-text-faint">Address</dt>
+            <dd className="mt-0.5 text-[14px] text-text">{initial.address}</dd>
+          </div>
+          <div>
+            <dt className="text-[11px] text-text-faint">City</dt>
+            <dd className="mt-0.5 text-[14px] text-text">{initial.city}</dd>
+          </div>
+          <div>
+            <dt className="text-[11px] text-text-faint">Area</dt>
+            <dd className="mt-0.5 text-[14px] text-text">
+              {initial.area.trim() ? initial.area : "—"}
+            </dd>
+          </div>
+          {ok ? (
+            <p className="sm:col-span-2 text-[13px] font-medium text-success">
+              {ok}
+            </p>
+          ) : null}
+        </dl>
+      )}
+    </div>
   );
 }
 
@@ -531,7 +645,7 @@ function ExperiencesPanel({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Partner venues: never publish / cancel from admin — venue dashboard only.
+  // Venue-organized: never publish / cancel from admin — venue portal only.
   const canEdit = hostedBy === "NYTO";
 
   useEffect(() => {
@@ -644,7 +758,9 @@ function ExperiencesPanel({
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (hostedBy !== "NYTO") {
-      setError("Partner venues publish nights in their own dashboard — not from admin.");
+      setError(
+        "Venue-organized venues publish dining nights in their own portal — not from admin.",
+      );
       return;
     }
     if (!canEdit) return;
@@ -836,7 +952,7 @@ function ExperiencesPanel({
       className={`grid gap-5 ${canEdit ? "lg:grid-cols-[minmax(0,1fr)_320px]" : ""}`}
     >
       <div className="space-y-3">
-        {!canEdit ? <PartnerHostedReadNote /> : null}
+        {!canEdit ? <VenueOrganizedReadNote /> : null}
         {syncNote ? (
           <p className="rounded-xl border border-success/25 bg-success/[0.07] px-3.5 py-2.5 text-[13px] font-medium text-success">
             {syncNote}
@@ -847,20 +963,20 @@ function ExperiencesPanel({
           {rows.length === 0 ? (
             <div className="px-5 py-12 text-center text-[14px] text-text-muted">
               {canEdit
-                ? "No nights yet. Publish on the right — it syncs to the guest app."
-                : "Nothing synced yet. Partner packages appear when the venue publishes."}
+                ? "No dining nights scheduled. Publish one on the right."
+                : "No dining nights synced yet."}
             </div>
           ) : (
             <div className="nyto-table-wrap">
               <table className="nyto-table">
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Categories</th>
+                    <th>Experience</th>
+                    <th>Category</th>
                     <th>Diet</th>
-                    <th>When</th>
-                    <th>Seats</th>
-                    <th>Cost</th>
+                    <th>Dining night</th>
+                    <th>Capacity</th>
+                    <th>Seat price</th>
                     <th />
                   </tr>
                 </thead>
@@ -871,12 +987,18 @@ function ExperiencesPanel({
                         <div className="font-medium text-ink">{m.name}</div>
                         {m.status === "CANCELLED" ? (
                           <Badge tone="danger">Cancelled</Badge>
+                        ) : m.status ? (
+                          <span className="text-[11px] text-text-faint">
+                            {statusLabel(m.status)}
+                          </span>
                         ) : null}
                       </td>
                       <td>
                         <div className="flex flex-wrap gap-1">
                           {m.categories.length === 0 ? (
-                            <span className="text-text-faint">—</span>
+                            <span className="text-text-faint">
+                              Category unavailable
+                            </span>
                           ) : (
                             m.categories.map((c) => (
                               <Badge key={c} tone="neutral">
@@ -890,12 +1012,21 @@ function ExperiencesPanel({
                         {statusLabel(m.diet)}
                       </td>
                       <td className="whitespace-nowrap text-text-muted">
-                        {m.when}
+                        {m.when || "No dining nights scheduled"}
                       </td>
                       <td className="tabular-nums text-text-muted">
-                        {m.capacity ?? "—"}
+                        {m.capacity != null
+                          ? `${m.capacity} seats`
+                          : "Capacity unavailable"}
                       </td>
-                      <td className="tabular-nums">{m.cost}</td>
+                      <td className="tabular-nums">
+                        {m.cost}
+                        {m.cost !== "Price unavailable" && m.cost !== "—" ? (
+                          <span className="block text-[11px] text-text-faint">
+                            per seat
+                          </span>
+                        ) : null}
+                      </td>
                       <td className="text-right">
                         {canEdit ? (
                           m.status !== "CANCELLED" ? (
@@ -916,11 +1047,13 @@ function ExperiencesPanel({
                               </button>
                             </div>
                           ) : (
-                            <span className="text-[12px] text-text-faint">—</span>
+                            <span className="text-[12px] text-text-faint">
+                              Cancelled
+                            </span>
                           )
                         ) : (
                           <span className="text-[12px] text-text-faint">
-                            Venue-run
+                            View only
                           </span>
                         )}
                       </td>
@@ -936,11 +1069,8 @@ function ExperiencesPanel({
       {canEdit ? (
         <form onSubmit={onSubmit} className="nyto-panel h-fit space-y-3.5 p-5">
           <h3 className="text-[15px] font-semibold text-ink">
-            {editingId ? "Edit night" : "Publish NYTO night"}
+            {editingId ? "Edit experience" : "Publish dining night"}
           </h3>
-          <p className="text-[12px] leading-relaxed text-text-faint">
-            Save publishes to the guest app on the same network.
-          </p>
           <div>
             <Label>Name</Label>
             <Input
@@ -1044,8 +1174,8 @@ function ContactsPanel({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [shiftStart, setShiftStart] = useState("11:00");
-  const [shiftEnd, setShiftEnd] = useState("16:00");
+  const [shiftStart, setShiftStart] = useState("");
+  const [shiftEnd, setShiftEnd] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -1074,16 +1204,23 @@ function ContactsPanel({
     setName("");
     setPhone("");
     setEmail("");
-    setShiftStart("11:00");
-    setShiftEnd("16:00");
+    setShiftStart("");
+    setShiftEnd("");
   }
 
   function onAdd(e: FormEvent) {
     e.preventDefault();
+    if (busy) return;
     const trimmedName = name.trim();
     const trimmedPhone = phone.trim();
+    const digits = trimmedPhone.replace(/\D/g, "");
     if (!trimmedName || !trimmedPhone || !shiftStart || !shiftEnd) {
       setError("Name, mobile, and shift times are required.");
+      setOk(null);
+      return;
+    }
+    if (digits.length < 10) {
+      setError("Enter a valid mobile number.");
       setOk(null);
       return;
     }
@@ -1122,21 +1259,21 @@ function ContactsPanel({
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
       <div className="nyto-panel overflow-hidden">
         <div className="border-b border-border-subtle px-5 py-3.5">
-          <h3 className="text-[15px] font-semibold text-ink">Venue contacts</h3>
+          <h3 className="text-[15px] font-semibold text-ink">Contacts</h3>
           <p className="mt-1 text-[13px] text-text-muted">
-            Managers and floor leads by shift — mobile first, email optional.
+            {rows.length} contact{rows.length === 1 ? "" : "s"}
           </p>
         </div>
         {rows.length === 0 ? (
           <div className="px-5 py-10 text-center text-[14px] text-text-muted">
-            No contacts yet. Add who to call for each shift.
+            No contacts added yet.
           </div>
         ) : (
           <div className="nyto-table-wrap">
             <table className="nyto-table">
               <thead>
                 <tr>
-                  <th>Name</th>
+                  <th>Person name</th>
                   <th>Shift</th>
                   <th>Mobile</th>
                   <th>Email</th>
@@ -1148,7 +1285,7 @@ function ContactsPanel({
                   <tr key={c.id}>
                     <td className="font-medium text-ink">{c.name}</td>
                     <td className="text-text-muted">
-                      {formatShiftRange(c.shiftStart, c.shiftEnd)}
+                      {formatShiftRange(c.shiftStart, c.shiftEnd, false)}
                     </td>
                     <td>
                       <a

@@ -6,8 +6,16 @@ export const MOCK_STATS = {
 };
 
 export const MOCK_ATTENTION = [
-  { id: "1", label: "2 pending payments", href: "/bookings" },
-  { id: "2", label: "1 host application", href: "/host-applications" },
+  {
+    id: "pending-hosts",
+    label: "1 host application awaiting review",
+    href: "/host-applications?status=PENDING",
+  },
+  {
+    id: "pending-payments",
+    label: "2 payments pending",
+    href: "/payments?status=PENDING",
+  },
 ];
 
 export const MOCK_BOOKINGS = [

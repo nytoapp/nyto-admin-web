@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
-import { HostedByBadge } from "@/components/ui/HostedBy";
+import { HostedByBadge, HostedByFilterBar } from "@/components/ui/HostedBy";
 import {
   ModuleChip,
   ModuleFeed,
@@ -26,6 +27,7 @@ import {
 import type { HostedBy, HostedByFilter } from "@/lib/hosted-by";
 import { resolveHostedBy } from "@/lib/hosted-by";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
+import { venueNetworkKpis } from "@/lib/kpi";
 import { mapVenueRow } from "@/lib/mappers";
 import { MOCK_VENUES } from "@/lib/mock/data";
 import {
@@ -44,21 +46,28 @@ type VenueListRow = {
   name: string;
   area: string;
   city: string;
-  tables: number;
+  tables: number | null;
   active: boolean;
   hostedBy: HostedBy;
-  contacts: number;
+  contacts: number | null;
   categories: ExperienceCategory[];
-  nightPhase: "present" | "upcoming" | "cancelled" | "none";
+  nightPhase: "upcoming" | "cancelled" | "none";
 };
 
 type CategoryFilter = "all" | ExperienceCategory;
+type StatusFilter = "all" | "active" | "inactive";
+
+function countLabel(value: number | null): string {
+  if (value == null) return "—";
+  return String(value);
+}
 
 export default function VenuesPage() {
   const router = useRouter();
   const { mockMode } = useAuth();
   const [q, setQ] = useState("");
   const [hostedBy, setHostedBy] = useState<HostedByFilter>("all");
+  const [status, setStatus] = useState<StatusFilter>("all");
   const [category, setCategory] = useState<CategoryFilter>("all");
   const [nightPhase, setNightPhase] = useState<NightPhaseFilter>("all");
   const [metaTick, setMetaTick] = useState(0);
@@ -90,15 +99,21 @@ export default function VenuesPage() {
           hostedBy: loadVenueHostedBy(v.id) ?? (v.hostedBy as HostedBy),
           contacts: contactCountForVenue(v.id, v.staff),
           categories: [...v.categories] as ExperienceCategory[],
-          nightPhase: v.nightPhase,
+          nightPhase: (v.nightPhase === "present"
+            ? "upcoming"
+            : v.nightPhase === "upcoming"
+              ? "upcoming"
+              : v.nightPhase === "cancelled"
+                ? "cancelled"
+                : "none") as VenueListRow["nightPhase"],
         }))
       : (data ?? []).map((v) => {
           const cats = categoriesForVenue(v.id);
           let phase: VenueListRow["nightPhase"] = "none";
-          if (venueMatchesNightPhase(v.id, "present")) phase = "present";
-          else if (venueMatchesNightPhase(v.id, "upcoming")) phase = "upcoming";
+          if (venueMatchesNightPhase(v.id, "upcoming")) phase = "upcoming";
           else if (venueMatchesNightPhase(v.id, "cancelled"))
             phase = "cancelled";
+          const localContacts = contactCountForVenue(v.id, 0);
           return {
             id: v.id,
             name: v.name,
@@ -107,7 +122,12 @@ export default function VenuesPage() {
             tables: v.tables,
             active: v.active,
             hostedBy: resolveHostedBy(v.hostedBy),
-            contacts: contactCountForVenue(v.id, 0),
+            contacts:
+              localContacts > 0
+                ? localContacts
+                : v.staff != null
+                  ? v.staff
+                  : localContacts,
             categories: cats,
             nightPhase: phase,
           };
@@ -117,36 +137,55 @@ export default function VenuesPage() {
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return rows.filter((v) => {
-      if (!v.active) return false;
+      if (status === "active" && !v.active) return false;
+      if (status === "inactive" && v.active) return false;
       if (hostedBy !== "all" && v.hostedBy !== hostedBy) return false;
       if (category !== "all" && !v.categories.includes(category)) return false;
       if (nightPhase !== "all" && v.nightPhase !== nightPhase) return false;
       if (!needle) return true;
       return [v.name, v.area, v.city].join(" ").toLowerCase().includes(needle);
     });
-  }, [rows, q, hostedBy, category, nightPhase]);
+  }, [rows, q, hostedBy, status, category, nightPhase]);
 
-  const nytoCount = rows.filter((v) => v.active && v.hostedBy === "NYTO").length;
-  const partnerCount = rows.filter(
-    (v) => v.active && v.hostedBy === "PARTNER",
-  ).length;
+  const network = venueNetworkKpis(
+    rows.map((v) => ({ active: v.active, hostedBy: v.hostedBy })),
+  );
 
   return (
     <div className="nyto-fade">
       <ModuleHero
         eyebrow="Operations"
         title="Venues"
-        description="Houses on the network — NYTO curated and partner kitchens. Click a row to open."
+        description="Manage venues and their dining nights."
         actions={
           <Link href="/venues/new">
             <Button>+ Add venue</Button>
           </Link>
         }
         stats={[
-          { label: "Active", value: String(rows.filter((v) => v.active).length) },
-          { label: "NYTO", value: String(nytoCount), soft: true },
-          { label: "Partner", value: String(partnerCount), soft: true },
-          { label: "Showing", value: String(filtered.length), soft: true },
+          {
+            label: "Active venues",
+            value:
+              loading && !mockMode && !data
+                ? "—"
+                : String(network.activeVenues),
+          },
+          {
+            label: "Active NYTO-organized",
+            value:
+              loading && !mockMode && !data
+                ? "—"
+                : String(network.activeNyto),
+            soft: true,
+          },
+          {
+            label: "Active Venue-organized",
+            value:
+              loading && !mockMode && !data
+                ? "—"
+                : String(network.activePartner),
+            soft: true,
+          },
         ]}
       />
 
@@ -158,28 +197,29 @@ export default function VenuesPage() {
             <Input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search venues…"
+              placeholder="Search venues..."
               aria-label="Search venues"
             />
           </div>
+          <HostedByFilterBar value={hostedBy} onChange={setHostedBy} />
           <div
             className="flex rounded-xl border border-border bg-bg p-0.5"
             role="group"
-            aria-label="Organised by"
+            aria-label="Venue status"
           >
             {(
               [
-                ["all", "All"],
-                ["NYTO", "NYTO"],
-                ["PARTNER", "Partner"],
+                ["all", "All status"],
+                ["active", "Active"],
+                ["inactive", "Inactive"],
               ] as const
             ).map(([id, label]) => (
               <button
                 key={id}
                 type="button"
-                onClick={() => setHostedBy(id)}
+                onClick={() => setStatus(id)}
                 className={`rounded-lg px-3.5 py-2 text-[13px] font-semibold transition ${
-                  hostedBy === id
+                  status === id
                     ? "bg-bg-soft text-ink"
                     : "text-text-muted hover:text-text"
                 }`}
@@ -188,9 +228,17 @@ export default function VenuesPage() {
               </button>
             ))}
           </div>
+          <p className="text-[13px] tabular-nums text-text-faint lg:ml-auto">
+            {filtered.length}
+            <span className="text-text-faint/70"> shown</span>
+          </p>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-1.5" role="group" aria-label="Table type">
+        <div
+          className="mt-3 flex flex-wrap gap-1.5"
+          role="group"
+          aria-label="Experience category"
+        >
           <ModuleChip
             active={category === "all"}
             onClick={() => setCategory("all")}
@@ -207,11 +255,14 @@ export default function VenuesPage() {
           ))}
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border-subtle pt-3">
+        <div
+          className="mt-3 flex flex-wrap gap-1.5 border-t border-border-subtle pt-3"
+          role="group"
+          aria-label="Dining night phase"
+        >
           {(
             [
               ["all", "Any night"],
-              ["present", "Present"],
               ["upcoming", "Upcoming"],
               ["cancelled", "Cancelled"],
             ] as const
@@ -226,7 +277,7 @@ export default function VenuesPage() {
         </div>
       </ModuleFilters>
 
-      {loading && !mockMode ? (
+      {loading && !mockMode && !data ? (
         <div className="overflow-hidden rounded-2xl border border-border">
           <Skeleton className="h-[72px] rounded-none" />
           <Skeleton className="h-[72px] rounded-none opacity-70" />
@@ -241,6 +292,7 @@ export default function VenuesPage() {
               onClick={() => {
                 setQ("");
                 setHostedBy("all");
+                setStatus("all");
                 setCategory("all");
                 setNightPhase("all");
               }}
@@ -252,11 +304,12 @@ export default function VenuesPage() {
       ) : (
         <ModuleFeed
           headers={
-            <div className="hidden border-b border-border-subtle px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-faint lg:grid lg:grid-cols-[minmax(0,1.5fr)_100px_72px_72px_28px] lg:gap-3">
+            <div className="hidden border-b border-border-subtle px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-faint lg:grid lg:grid-cols-[minmax(0,1.4fr)_minmax(140px,0.9fr)_88px_88px_88px_28px] lg:gap-3">
               <span>Venue</span>
-              <span>Hosted</span>
-              <span className="text-right">Nights</span>
+              <span>Organized by</span>
+              <span className="text-right">Dining nights</span>
               <span className="text-right">Contacts</span>
+              <span className="text-right">Status</span>
               <span />
             </div>
           }
@@ -269,7 +322,7 @@ export default function VenuesPage() {
             >
               <ModuleFeedRow
                 onClick={() => router.push(`/venues/${v.id}`)}
-                className="lg:grid-cols-[minmax(0,1.5fr)_100px_72px_72px_28px] lg:items-center lg:gap-3"
+                className="lg:grid-cols-[minmax(0,1.4fr)_minmax(140px,0.9fr)_88px_88px_88px_28px] lg:items-center lg:gap-3"
               >
                 <div className="min-w-0">
                   <p className="truncate text-[15px] font-semibold tracking-[-0.02em] text-ink">
@@ -278,16 +331,24 @@ export default function VenuesPage() {
                   <p className="mt-1 truncate text-[12px] text-text-faint">
                     {v.area} · {v.city}
                   </p>
+                  <div className="mt-1.5 lg:hidden">
+                    <HostedByBadge value={v.hostedBy} short />
+                  </div>
                 </div>
-                <div className="hidden lg:block">
+                <div className="hidden min-w-0 lg:block">
                   <HostedByBadge value={v.hostedBy} short />
                 </div>
                 <p className="tabular-nums text-[13px] text-text-muted lg:text-right">
-                  {v.tables}
+                  {countLabel(v.tables)}
                 </p>
                 <p className="tabular-nums text-[13px] text-text-muted lg:text-right">
-                  {v.contacts}
+                  {countLabel(v.contacts)}
                 </p>
+                <div className="lg:text-right">
+                  <Badge tone={v.active ? "success" : "neutral"}>
+                    {v.active ? "Active" : "Inactive"}
+                  </Badge>
+                </div>
                 <span
                   className="nyto-bookings-arrow hidden text-[16px] text-text-faint lg:block lg:text-right"
                   aria-hidden

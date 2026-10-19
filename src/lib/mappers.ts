@@ -73,8 +73,10 @@ export type VenueRow = {
   area: string;
   city: string;
   address: string;
-  tables: number;
-  staff: number;
+  /** Dining-night count from `_count.tables` when present; null if count unavailable. */
+  tables: number | null;
+  /** Contact/staff count from `_count.staff` when present; null if unavailable. */
+  staff: number | null;
   active: boolean;
   /** Who organises nights here — NYTO or the venue. Never mixed. */
   hostedBy: HostedBy;
@@ -89,8 +91,8 @@ export function mapVenueRow(
     area: v.area || "—",
     city: v.city,
     address: v.address,
-    tables: v._count?.tables ?? 0,
-    staff: v._count?.staff ?? 0,
+    tables: v._count ? v._count.tables : null,
+    staff: v._count ? v._count.staff : null,
     active: v.isActive,
     hostedBy: resolveHostedBy(v.hostedBy),
   };

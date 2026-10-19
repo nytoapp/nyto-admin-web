@@ -18,6 +18,7 @@ import {
 import { listGuests } from "@/lib/api/guests";
 import { statusLabel } from "@/lib/format";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
+import { guestListKpis } from "@/lib/kpi";
 import { MOCK_GUESTS } from "@/lib/mock/data";
 import { useAuth } from "@/providers/auth-provider";
 
@@ -63,37 +64,57 @@ export default function GuestsPage() {
     [debouncedQ],
   );
 
-  const source: GuestRow[] = mockMode
-    ? MOCK_GUESTS.filter((g) => {
+  const source = useMemo<GuestRow[]>(() => {
+    if (mockMode) {
+      return MOCK_GUESTS.filter((g) => {
         const needle = q.trim().toLowerCase();
         if (!needle) return true;
         return [g.name, g.phone, g.email, g.lastVenue]
           .join(" ")
           .toLowerCase()
           .includes(needle);
-      })
-    : (data ?? []);
+      });
+    }
+    return data ?? [];
+  }, [mockMode, q, data]);
 
   const rows = useMemo(() => {
     if (filter === "all") return source;
     return source.filter((g) => g.status === filter);
   }, [source, filter]);
 
-  const bookedCount = source.filter((g) => g.status === "ACTIVE").length;
-  const newCount = source.filter((g) => g.status === "NEW").length;
-  const bookingSum = source.reduce((s, g) => s + g.bookings, 0);
+  const kpi = useMemo(() => guestListKpis(source), [source]);
 
   return (
     <div className="nyto-fade">
       <ModuleHero
         eyebrow="Network"
         title="Guests"
-        description="Guest-app people — who booked, who only signed up, and where they last sat."
+        description="Consumer accounts only (USER). “With a booking” means ≥1 lifetime booking of any status — not “recently registered.”"
         stats={[
-          { label: "Guests", value: String(source.length) },
-          { label: "Booked", value: String(bookedCount), soft: true },
-          { label: "New", value: String(newCount), soft: true },
-          { label: "Bookings", value: String(bookingSum), soft: true },
+          {
+            label: "Guest accounts",
+            value: String(kpi.guestAccounts),
+            hint: "Distinct people · loaded list",
+          },
+          {
+            label: "With a booking",
+            value: String(kpi.withBooking),
+            soft: true,
+            hint: "Lifetime · any booking status",
+          },
+          {
+            label: "Signed up only",
+            value: String(kpi.signedUpOnly),
+            soft: true,
+            hint: "Never booked · exclusive cohort",
+          },
+          {
+            label: "Booking records",
+            value: String(kpi.bookingRecords),
+            soft: true,
+            hint: "Sum of bookings · not guests",
+          },
         ]}
       />
 
@@ -124,21 +145,21 @@ export default function GuestsPage() {
           <ModulePill
             active={filter === "ACTIVE"}
             onClick={() => setFilter("ACTIVE")}
-            label="Booked"
-            count={bookedCount}
-            title="At least one booking"
+            label="With a booking"
+            count={kpi.withBooking}
+            title="Lifetime · at least one booking of any status"
           />
           <ModulePill
             active={filter === "NEW"}
             onClick={() => setFilter("NEW")}
             label="Signed up only"
-            count={newCount}
-            title="In the app, no booking yet"
+            count={kpi.signedUpOnly}
+            title="Guest account · never booked"
           />
         </div>
         <p className="mt-2.5 text-[12px] text-text-faint">
-          Active = booked at least once. New = logged into the guest app, no
-          booking yet. Venue staff are not listed here.
+          Cohorts are exclusive. Booking count in each row is booking records,
+          not seats. Venue staff and admins are not listed here.
         </p>
       </ModuleFilters>
 

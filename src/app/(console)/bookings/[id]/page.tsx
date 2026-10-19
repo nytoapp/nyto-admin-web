@@ -239,9 +239,20 @@ export default function BookingDetailPage() {
   const isSettled =
     booking.status === "CANCELLED" || booking.status === "NO_SHOW";
   const seatsLine =
-    booking.capacity != null
+    booking.seats != null && booking.capacity != null
       ? `${booking.seats} of ${booking.capacity} seats`
-      : `${booking.seats} seat${booking.seats === 1 ? "" : "s"}`;
+      : booking.seats != null
+        ? `${booking.seats} seat${booking.seats === 1 ? "" : "s"}`
+        : "Seats unavailable";
+
+  const amountCaption =
+    booking.paymentStatus === "REFUNDED"
+      ? "Linked payment amount · refunded"
+      : booking.paymentStatus === "CAPTURED"
+        ? "Linked payment amount · captured"
+        : booking.paymentStatus
+          ? "Linked payment amount"
+          : "Amount unavailable";
 
   return (
     <div className="nyto-fade mx-auto max-w-4xl">
@@ -252,7 +263,6 @@ export default function BookingDetailPage() {
         ← Bookings
       </Link>
 
-      {/* Hero — one composition */}
       <header className="nyto-bookings-hero relative mt-5 overflow-hidden rounded-[22px] border border-border bg-bg-elevated shadow-[var(--shadow-md)]">
         <div
           className={`pointer-events-none absolute inset-0 opacity-90 ${
@@ -275,12 +285,17 @@ export default function BookingDetailPage() {
               </span>
             ) : null}
             <Badge tone={statusTone(booking.status)}>
-              {statusLabel(booking.status)}
+              Booking · {statusLabel(booking.status)}
             </Badge>
+            {booking.paymentStatus ? (
+              <Badge tone={statusTone(booking.paymentStatus)}>
+                Payment · {statusLabel(booking.paymentStatus)}
+              </Badge>
+            ) : null}
             {syncedAt ? (
               <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] tabular-nums text-text-faint">
                 <span className="h-1.5 w-1.5 rounded-full bg-accent nyto-live-dot" />
-                Live ·{" "}
+                Updated ·{" "}
                 {syncedAt.toLocaleTimeString("en-GB", {
                   hour: "2-digit",
                   minute: "2-digit",
@@ -297,6 +312,11 @@ export default function BookingDetailPage() {
               <h1 className="font-display text-[36px] font-medium leading-[1.05] tracking-[-0.04em] text-ink sm:text-[42px]">
                 {booking.guest}
               </h1>
+              {booking.checkInCode ? (
+                <p className="mt-1 font-mono text-[13px] text-text-faint">
+                  Check-in {booking.checkInCode}
+                </p>
+              ) : null}
               <p className="mt-2 text-[15px] text-text-muted">
                 {booking.venue}
                 {booking.area && booking.area !== "—"
@@ -309,25 +329,18 @@ export default function BookingDetailPage() {
             </div>
             <div className="sm:text-right">
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-faint">
-                Amount
+                {amountCaption}
               </p>
               <p className="nyto-amount-hero mt-1 font-display text-[32px] font-medium leading-none tracking-[-0.03em]">
                 {booking.amount}
               </p>
-              {booking.paymentStatus ? (
-                <p className="mt-2 text-[12px] text-text-muted">
-                  {statusLabel(booking.paymentStatus)}
-                </p>
-              ) : (
-                <p className="mt-2 text-[12px] text-text-faint">No payment yet</p>
-              )}
             </div>
           </div>
 
           <p className="mt-5 max-w-2xl border-t border-border-subtle pt-4 text-[13px] leading-relaxed text-text-faint">
             {booking.hostedBy === "PARTNER"
-              ? "Partner hosted night — packages come from the venue dashboard; NYTO takes platform share."
-              : "NYTO curated night — admin published this experience for the guest app."}
+              ? "Venue-organized night — the venue publishes this experience; shown here for monitoring."
+              : "NYTO-organized night — admin published this experience for the guest app."}
             {!isSettled && booking.seatsLeft != null
               ? ` · ${booking.seatsLeft} seat${booking.seatsLeft === 1 ? "" : "s"} still open on this table.`
               : null}
@@ -376,14 +389,19 @@ export default function BookingDetailPage() {
             <dl className="mt-4 space-y-0">
               <DossierRow label="Amount" value={booking.amount} />
               <DossierRow
-                label="Status"
+                label="Payment status"
                 value={
                   booking.paymentStatus
                     ? statusLabel(booking.paymentStatus)
-                    : "No payment yet"
+                    : "No payment record"
                 }
               />
-              <DossierRow label="Method" value={methodLabel} />
+              <DossierRow
+                label="Method"
+                value={
+                  booking.paymentMethod ? methodLabel : "Method unavailable"
+                }
+              />
               <DossierRow
                 label="Reference"
                 value={booking.paymentRef || "—"}

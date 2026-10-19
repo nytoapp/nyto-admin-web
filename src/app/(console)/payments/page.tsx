@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Badge, statusTone } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Field";
 import { HostedByBadge } from "@/components/ui/HostedBy";
@@ -29,11 +30,30 @@ import { useAuth } from "@/providers/auth-provider";
 
 type StatusFilter = "all" | "CAPTURED" | "PENDING" | "FAILED" | "REFUNDED";
 
+function parsePaymentStatus(raw: string | null): StatusFilter {
+  if (
+    raw === "CAPTURED" ||
+    raw === "PENDING" ||
+    raw === "FAILED" ||
+    raw === "REFUNDED"
+  ) {
+    return raw;
+  }
+  return "all";
+}
+
 export default function PaymentsPage() {
+  const searchParams = useSearchParams();
   const { mockMode, getToken } = useAuth();
   const [q, setQ] = useState("");
-  const [status, setStatus] = useState<StatusFilter>("all");
+  const [status, setStatus] = useState<StatusFilter>(() =>
+    parsePaymentStatus(searchParams.get("status")),
+  );
   const [hostedBy, setHostedBy] = useState<HostedByFilter>("all");
+
+  useEffect(() => {
+    setStatus(parsePaymentStatus(searchParams.get("status")));
+  }, [searchParams]);
   const [localRows, setLocalRows] = useState<PaymentRow[] | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [refundingId, setRefundingId] = useState<string | null>(null);
@@ -137,12 +157,39 @@ export default function PaymentsPage() {
       <ModuleHero
         eyebrow="Operations"
         title="Payments"
-        description="Checkout ledger across NYTO curated and partner nights — capture, pending, and refunds."
+        description="Payments in current feed · amounts in INR by payment status."
         stats={[
-          { label: "In ledger", value: String(source.length) },
-          { label: "Captured", value: formatMoneyInr(capturedTotal), soft: true },
-          { label: "Pending", value: formatMoneyInr(pendingTotal), soft: true },
-          { label: "Refunded", value: formatMoneyInr(refundedTotal), soft: true },
+          {
+            label: "Successfully captured",
+            value:
+              loading && !mockMode && !data
+                ? "—"
+                : formatMoneyInr(capturedTotal),
+          },
+          {
+            label: "Pending amount",
+            value:
+              loading && !mockMode && !data
+                ? "—"
+                : formatMoneyInr(pendingTotal),
+            soft: true,
+          },
+          {
+            label: "Refunded amount",
+            value:
+              loading && !mockMode && !data
+                ? "—"
+                : formatMoneyInr(refundedTotal),
+            soft: true,
+          },
+          {
+            label: "Failed payments",
+            value:
+              loading && !mockMode && !data
+                ? "—"
+                : String(statusCounts.FAILED ?? 0),
+            soft: true,
+          },
         ]}
       />
 
@@ -167,13 +214,13 @@ export default function PaymentsPage() {
           <div
             className="flex rounded-xl border border-border bg-bg p-0.5"
             role="group"
-            aria-label="Organised by"
+            aria-label="Organized by"
           >
             {(
               [
                 ["all", "All"],
-                ["NYTO", "NYTO"],
-                ["PARTNER", "Partner"],
+                ["NYTO", "NYTO-organized"],
+                ["PARTNER", "Venue-organized"],
               ] as const
             ).map(([id, label]) => (
               <button
@@ -192,7 +239,10 @@ export default function PaymentsPage() {
           </div>
           <p className="text-[13px] tabular-nums text-text-faint lg:ml-auto">
             {filtered.length}
-            <span className="text-text-faint/70"> / {source.length}</span>
+            <span className="text-text-faint/70">
+              {" "}
+              payment records shown / {source.length} in ledger
+            </span>
           </p>
         </div>
 
