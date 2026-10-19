@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/Badge";
 import {
   HOSTED_BY_FILTERS,
   hostedByLabel,
+  hostedByShort,
   hostedByTone,
   type HostedBy,
   type HostedByFilter,
@@ -17,9 +18,11 @@ export function HostedByBadge({
   short?: boolean;
 }) {
   return (
-    <Badge tone={hostedByTone(value)}>
-      {short ? (value === "PARTNER" ? "Partner" : "NYTO") : hostedByLabel(value)}
-    </Badge>
+    <span className="inline-flex max-w-full shrink-0 whitespace-nowrap">
+      <Badge tone={hostedByTone(value)}>
+        {short ? hostedByShort(value) : hostedByLabel(value)}
+      </Badge>
+    </span>
   );
 }
 
@@ -34,7 +37,7 @@ export function HostedByFilterBar({
     <div
       className="flex flex-wrap rounded-xl border border-border bg-bg-elevated p-0.5"
       role="group"
-      aria-label="Hosted by"
+      aria-label="Organized by"
     >
       {HOSTED_BY_FILTERS.map((item) => (
         <button
@@ -54,27 +57,15 @@ export function HostedByFilterBar({
   );
 }
 
-export function NytoCuratedCreateNote() {
+/** Compact notice for Venue-organized venues (view-only inventory in Admin). */
+export function VenueOrganizedReadNote() {
   return (
-    <div className="rounded-xl border border-accent/25 bg-[var(--accent-wash)] px-3.5 py-3 text-[13px] leading-relaxed text-text-muted">
-      <p className="font-semibold text-accent-soft">NYTO curated night</p>
-      <p className="mt-1">
-        Admin publishes nights only when NYTO is organising. Partner venues
-        manage their own packages — we take the platform share.
-      </p>
-    </div>
+    <p className="rounded-xl border border-border-subtle bg-bg/40 px-3.5 py-2.5 text-[13px] leading-relaxed text-text-muted">
+      This venue manages its own dining nights. Inventory is shown here for
+      monitoring.
+    </p>
   );
 }
 
-export function PartnerHostedReadNote() {
-  return (
-    <div className="rounded-xl border border-success/25 bg-success/[0.07] px-4 py-3.5 text-[13px] leading-relaxed text-text-muted">
-      <p className="font-semibold text-success">Partner venue dashboard</p>
-      <p className="mt-1.5">
-        Experiences, categories, diet, price, and schedule are created by the
-        venue team in their dashboard. They sync here for ops and into the NYTO
-        guest app. Admin does not edit packages — NYTO takes the platform share.
-      </p>
-    </div>
-  );
-}
+/** @deprecated Use VenueOrganizedReadNote */
+export const PartnerHostedReadNote = VenueOrganizedReadNote;

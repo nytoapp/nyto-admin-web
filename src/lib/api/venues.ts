@@ -131,7 +131,7 @@ export async function createVenueTable(
     inclusions?: string[];
     menuId?: string;
     status?: "OPEN" | "CANCELLED";
-    /** Admin create path is NYTO curated only; partners publish from venue tooling. */
+    /** Admin create path is NYTO-organized only; Venue-organized publish from venue tooling. */
     hostedBy?: "NYTO";
   },
 ) {

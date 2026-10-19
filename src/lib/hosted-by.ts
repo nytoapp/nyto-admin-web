@@ -1,12 +1,12 @@
-/** Who runs the night. Frontend-first — backend field lands later. */
+/** Who organises the dining experience. Stored values remain NYTO | PARTNER. */
 export type HostedBy = "NYTO" | "PARTNER";
 
 export type HostedByFilter = "all" | HostedBy;
 
 export const HOSTED_BY_FILTERS: { id: HostedByFilter; label: string }[] = [
   { id: "all", label: "All" },
-  { id: "NYTO", label: "NYTO" },
-  { id: "PARTNER", label: "Partner" },
+  { id: "NYTO", label: "NYTO-organized" },
+  { id: "PARTNER", label: "Venue-organized" },
 ];
 
 export function resolveHostedBy(raw: unknown): HostedBy {
@@ -19,14 +19,14 @@ export function resolveHostedBy(raw: unknown): HostedBy {
   return "NYTO";
 }
 
-/** Short chip / filter label */
+/** Compact badge / chip label */
 export function hostedByShort(value: HostedBy): string {
-  return value === "PARTNER" ? "Partner" : "NYTO";
+  return value === "PARTNER" ? "Venue-organized" : "NYTO-organized";
 }
 
-/** Full badge label */
+/** Full badge label — who organises the experience */
 export function hostedByLabel(value: HostedBy): string {
-  return value === "PARTNER" ? "Partner hosted" : "NYTO curated";
+  return value === "PARTNER" ? "Venue-organized" : "NYTO-organized";
 }
 
 export function hostedByTone(
@@ -37,6 +37,6 @@ export function hostedByTone(
 
 export function hostedByHint(value: HostedBy): string {
   return value === "PARTNER"
-    ? "Created and run by the venue on NYTO."
-    : "Curated and run by NYTO at this venue.";
+    ? "The venue organises and publishes this experience."
+    : "NYTO organises and manages this experience.";
 }

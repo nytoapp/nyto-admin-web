@@ -2,7 +2,7 @@ import { apiRequest } from "@/lib/api/client";
 import type { AdminBooking, AdminTable, Venue } from "@/lib/types";
 
 export type NetworkTable = AdminTable & {
-  venue?: Pick<Venue, "id" | "name" | "city" | "area">;
+  venue?: Pick<Venue, "id" | "name" | "city" | "area" | "hostedBy">;
 };
 
 export async function listTables(

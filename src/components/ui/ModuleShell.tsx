@@ -1,8 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { type ReactNode } from "react";
 
 /** Shared Bookings-grade module chrome — use on every console page. */
+
+export type ModuleHeroStat = {
+  label: string;
+  value: string;
+  soft?: boolean;
+  /** Concise definition — entity / window / unit. */
+  hint?: string;
+  /** Drill-down when filters are implemented on the destination. */
+  href?: string;
+};
 
 export function ModuleHero({
   eyebrow,
@@ -16,7 +27,7 @@ export function ModuleHero({
   title: string;
   description: string;
   actions?: ReactNode;
-  stats?: { label: string; value: string; soft?: boolean }[];
+  stats?: ModuleHeroStat[];
   children?: ReactNode;
 }) {
   return (
@@ -51,24 +62,43 @@ export function ModuleHero({
 
         {stats && stats.length > 0 ? (
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {stats.map((s, i) => (
-              <div
-                key={s.label}
-                className={`nyto-bookings-stat nyto-step-in rounded-xl border px-3.5 py-3 ${
-                  s.soft
-                    ? "border-border-subtle bg-bg/40"
-                    : "border-accent/20 bg-[var(--accent-wash)]"
-                }`}
-                style={{ animationDelay: `${40 + i * 40}ms` }}
-              >
-                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">
-                  {s.label}
-                </p>
-                <p className="mt-1 font-display text-[26px] font-medium leading-none tracking-[-0.03em] text-ink">
-                  {s.value}
-                </p>
-              </div>
-            ))}
+            {stats.map((s, i) => {
+              const inner = (
+                <>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">
+                    {s.label}
+                  </p>
+                  <p className="mt-1 font-display text-[26px] font-medium leading-none tracking-[-0.03em] text-ink">
+                    {s.value}
+                  </p>
+                  {s.hint ? (
+                    <p className="mt-1.5 text-[11px] leading-snug text-text-faint">
+                      {s.hint}
+                    </p>
+                  ) : null}
+                </>
+              );
+              const className = `nyto-bookings-stat nyto-step-in block rounded-xl border px-3.5 py-3 ${
+                s.soft
+                  ? "border-border-subtle bg-bg/40"
+                  : "border-accent/20 bg-[var(--accent-wash)]"
+              } ${s.href ? "transition hover:border-accent/40" : ""}`;
+              const style = { animationDelay: `${40 + i * 40}ms` };
+              return s.href ? (
+                <Link
+                  key={s.label}
+                  href={s.href}
+                  className={className}
+                  style={style}
+                >
+                  {inner}
+                </Link>
+              ) : (
+                <div key={s.label} className={className} style={style}>
+                  {inner}
+                </div>
+              );
+            })}
           </div>
         ) : null}
 

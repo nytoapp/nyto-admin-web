@@ -23,7 +23,7 @@ export type Venue = {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
-  /** Who organises nights — NYTO curated or partner venue. Frontend-first. */
+  /** Who organises nights — NYTO | PARTNER (UI: NYTO-organized / Venue-organized). */
   hostedBy?: HostedBy | string | null;
   _count?: { tables: number; staff: number; menus: number };
 };
@@ -65,7 +65,7 @@ export type AdminTable = {
   vibeCopy?: string | null;
   inclusions: string[];
   status: TableStatus;
-  /** Who runs this night. Missing → treated as NYTO curated. */
+  /** Who runs this night. Missing → treated as NYTO-organized. */
   hostedBy?: HostedBy | string | null;
   seatsTaken?: number;
   seatsLeft?: number;

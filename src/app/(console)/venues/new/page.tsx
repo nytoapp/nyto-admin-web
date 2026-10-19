@@ -19,6 +19,7 @@ import {
   type ExperienceCategory,
 } from "@/lib/categories";
 import type { HostedBy } from "@/lib/hosted-by";
+import { hostedByLabel } from "@/lib/hosted-by";
 import {
   priceTierFromLocalDatetime,
   toIsoFromLocalDatetime,
@@ -26,19 +27,33 @@ import {
 import { saveVenueHostedBy } from "@/lib/venue-meta";
 import { useAuth } from "@/providers/auth-provider";
 
+function previewStartLabel(startsAt: string): string {
+  if (!startsAt) return "Start time not set";
+  const d = new Date(startsAt);
+  if (Number.isNaN(d.getTime())) return "Start time not set";
+  return d
+    .toLocaleString("en-GB", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: "Asia/Kolkata",
+    })
+    .replace(",", " ·");
+}
+
 export default function NewVenuePage() {
   const router = useRouter();
   const { getToken, mockMode } = useAuth();
 
-  const [hostedBy, setHostedBy] = useState<HostedBy>("NYTO");
+  const [path, setPath] = useState<HostedBy>("NYTO");
 
-  // Place
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("Hyderabad");
   const [area, setArea] = useState("");
 
-  // First NYTO night — price & capacity set per venue/night
   const [experienceName, setExperienceName] = useState("3-course dinner");
   const [diet, setDiet] = useState<"VEGETARIAN" | "NON_VEGETARIAN" | "VEGAN">(
     "NON_VEGETARIAN",
@@ -53,16 +68,23 @@ export default function NewVenuePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isPartner = hostedBy === "PARTNER";
+  const isVenueOrganized = path === "PARTNER";
   const previewName = name.trim() || "New venue";
   const previewPlace = [area.trim() || "Area", city.trim() || "City"].join(
     " · ",
   );
-  const priceLabel = `₹${Number(seatPrice || 0).toLocaleString("en-IN")}`;
+  const priceLabel =
+    seatPrice.trim() === "" || !Number.isFinite(Number(seatPrice))
+      ? "Price not set"
+      : `₹${Number(seatPrice).toLocaleString("en-IN")}`;
+  const capacityLabel =
+    capacity.trim() === "" || !Number.isFinite(Number(capacity))
+      ? "Capacity not set"
+      : `${Number(capacity)} seats`;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (isPartner) return;
+    if (busy || isVenueOrganized) return;
 
     if (!name.trim() || !address.trim() || !city.trim()) {
       setError("Venue name, address, and city are required.");
@@ -78,6 +100,11 @@ export default function NewVenuePage() {
     }
     if (!startsAt) {
       setError("Pick a start time for the first night.");
+      return;
+    }
+    const startMs = new Date(startsAt).getTime();
+    if (Number.isNaN(startMs) || startMs <= Date.now()) {
+      setError("Start time must be in the future.");
       return;
     }
     const price = Number(seatPrice);
@@ -160,8 +187,8 @@ export default function NewVenuePage() {
               Add venue
             </h1>
             <p className="mt-2.5 max-w-md text-[14px] text-text-muted">
-              NYTO curated publish from admin. Partner kitchens onboard via host
-              applications.
+              Create a NYTO-organized venue, or open Host applications for
+              Venue-organized onboarding.
             </p>
           </div>
           <Link href="/venues">
@@ -170,20 +197,24 @@ export default function NewVenuePage() {
         </div>
       </div>
 
-      <div className="mb-5 grid grid-cols-2 gap-2 sm:max-w-md">
+      <div
+        className="mb-5 grid grid-cols-2 gap-2 sm:max-w-md"
+        role="group"
+        aria-label="Organizing model"
+      >
         {(
           [
-            ["NYTO", "NYTO curated"],
-            ["PARTNER", "Partner"],
+            ["NYTO", "NYTO-organized"],
+            ["PARTNER", "Venue-organized"],
           ] as const
         ).map(([id, label]) => {
-          const on = hostedBy === id;
+          const on = path === id;
           return (
             <button
               key={id}
               type="button"
               onClick={() => {
-                setHostedBy(id);
+                setPath(id);
                 setError(null);
               }}
               className={`rounded-xl border px-3 py-3 text-[13px] font-semibold transition ${
@@ -198,19 +229,17 @@ export default function NewVenuePage() {
         })}
       </div>
 
-      {isPartner ? (
+      {isVenueOrganized ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.85fr)]">
           <div className="nyto-panel space-y-5 p-6 sm:p-8">
             <HostedByBadge value="PARTNER" />
             <h2 className="font-display text-[24px] font-medium tracking-[-0.02em] text-ink">
-              Partners onboard themselves
+              Onboarding a Venue-organized venue?
             </h2>
             <p className="max-w-lg text-[14px] leading-relaxed text-text-muted">
-              Name, address, menus, categories, price, and schedule are filled
-              in the <span className="font-semibold text-ink">venue portal</span>{" "}
-              (or via a host application). Admin does not create that shell
-              here — you approve, then watch packages sync view-only and take
-              the platform share.
+              The venue applies through Host applications. After approval, they
+              manage and publish their own dining nights. Admin monitors synced
+              inventory here and cannot create that venue from this form.
             </p>
             <div className="flex flex-wrap gap-3 pt-1">
               <Link href="/host-applications">
@@ -226,9 +255,9 @@ export default function NewVenuePage() {
               Flow
             </p>
             <ol className="mt-4 list-decimal space-y-3 pl-4">
-              <li>Venue applies / signs up on the portal</li>
-              <li>Admin approves in Host applications</li>
-              <li>They publish nights → syncs to admin + NYTO app</li>
+              <li>Venue submits a host application</li>
+              <li>Admin reviews and approves</li>
+              <li>Venue publishes nights — inventory syncs here view-only</li>
             </ol>
           </aside>
         </div>
@@ -236,7 +265,10 @@ export default function NewVenuePage() {
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
           <form onSubmit={onSubmit} className="nyto-panel space-y-6 p-5 sm:p-7">
             <section className="space-y-4">
-              <h2 className="text-[14px] font-semibold text-ink">Place</h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-[14px] font-semibold text-ink">Venue</h2>
+                <HostedByBadge value="NYTO" short />
+              </div>
               <div>
                 <Label>Venue name</Label>
                 <Input
@@ -281,10 +313,10 @@ export default function NewVenuePage() {
             <section className="space-y-4">
               <div>
                 <h2 className="text-[14px] font-semibold text-ink">
-                  First night
+                  First dining night
                 </h2>
                 <p className="mt-1 text-[12px] text-text-faint">
-                  Published with the venue — guests can book in the NYTO app.
+                  Price and capacity apply to this NYTO-organized night only.
                 </p>
               </div>
               <div>
@@ -297,7 +329,7 @@ export default function NewVenuePage() {
                 />
               </div>
               <div>
-                <Label>Categories</Label>
+                <Label>Category</Label>
                 <div className="mt-1.5 flex flex-wrap gap-2">
                   {EXPERIENCE_CATEGORIES.map((c) => {
                     const on = categories.includes(c.id);
@@ -323,7 +355,7 @@ export default function NewVenuePage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Dietary</Label>
+                  <Label>Dietary option</Label>
                   <Select
                     value={diet}
                     onChange={(e) =>
@@ -354,7 +386,7 @@ export default function NewVenuePage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Starts at</Label>
+                  <Label>Start date/time</Label>
                   <Input
                     type="datetime-local"
                     required
@@ -380,7 +412,7 @@ export default function NewVenuePage() {
             <FieldError message={error} />
 
             <Button type="submit" disabled={busy} className="w-full sm:w-auto">
-              {busy ? "Publishing…" : "Create venue + publish night"}
+              {busy ? "Publishing…" : "Create venue and publish dining night"}
             </Button>
           </form>
 
@@ -394,7 +426,7 @@ export default function NewVenuePage() {
               aria-hidden
             />
             <p className="relative text-[11px] font-semibold uppercase tracking-[0.14em] text-text-faint">
-              Network preview
+              Preview
             </p>
             <div className="relative mt-6 space-y-4">
               <HostedByBadge value="NYTO" />
@@ -406,12 +438,13 @@ export default function NewVenuePage() {
                   {previewPlace}
                 </p>
               </div>
-              <div className="rounded-xl border border-border-subtle bg-bg-soft/80 px-4 py-3.5 space-y-2">
+              <div className="space-y-2 rounded-xl border border-border-subtle bg-bg-soft/80 px-4 py-3.5">
                 <p className="text-[13px] font-semibold text-ink">
                   {experienceName.trim() || "Experience"}
                 </p>
                 <p className="text-[12px] text-text-muted">
-                  {categories.map(categoryLabel).join(" · ") || "—"}
+                  {categories.map(categoryLabel).join(" · ") ||
+                    "Category not set"}
                   {" · "}
                   {diet === "NON_VEGETARIAN"
                     ? "Non-veg"
@@ -421,25 +454,15 @@ export default function NewVenuePage() {
                 </p>
                 <p className="text-[14px] font-semibold tabular-nums text-accent-soft">
                   {priceLabel}
-                  <span className="ml-2 text-[12px] font-medium text-text-faint">
-                    · {capacity || "—"} seats
-                  </span>
                 </p>
-                {startsAt ? (
-                  <p className="text-[12px] text-text-faint">
-                    {new Date(startsAt).toLocaleString("en-GB", {
-                      day: "numeric",
-                      month: "short",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      hour12: false,
-                      timeZone: "Asia/Kolkata",
-                    })}
-                  </p>
-                ) : (
-                  <p className="text-[12px] text-text-faint">Set a start time</p>
-                )}
+                <p className="text-[12px] text-text-faint">{capacityLabel}</p>
+                <p className="text-[12px] text-text-faint">
+                  {previewStartLabel(startsAt)}
+                </p>
               </div>
+              <p className="text-[11px] text-text-faint">
+                {hostedByLabel("NYTO")} · illustrative only until you submit.
+              </p>
             </div>
           </aside>
         </div>

@@ -50,7 +50,7 @@ export function categoriesForVenue(venueId: string): ExperienceCategory[] {
   return [...set];
 }
 
-export type NightPhaseFilter = "all" | "present" | "upcoming" | "cancelled";
+export type NightPhaseFilter = "all" | "upcoming" | "cancelled";
 
 export function venueMatchesNightPhase(
   venueId: string,
@@ -67,8 +67,6 @@ export function venueMatchesNightPhase(
     if (Number.isNaN(t)) {
       return phase === "upcoming";
     }
-    const dayMs = 24 * 60 * 60 * 1000;
-    if (phase === "present") return t <= now + dayMs && t >= now - dayMs;
     if (phase === "upcoming") return t > now;
     return false;
   });
