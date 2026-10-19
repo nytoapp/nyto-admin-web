@@ -75,18 +75,23 @@ export function bookingFeedKpis(bookings: BookingKpiInput[]) {
   };
 }
 
-export type GuestKpiInput = { status: string; bookings: number };
+export type GuestKpiInput = { status?: string; bookings: number };
 
-/** Guests list: ACTIVE = has ≥1 booking (any status); NEW = never booked. */
+/**
+ * Guest cohorts from booking-record counts (any booking status counts).
+ * Prefer `bookings` over status labels so KPIs stay mutually exclusive.
+ */
+export function guestHasBooked(g: GuestKpiInput): boolean {
+  return Number.isFinite(g.bookings) && g.bookings > 0;
+}
+
 export function guestListKpis(guests: GuestKpiInput[]) {
-  const withBooking = guests.filter((g) => g.status === "ACTIVE").length;
-  const signedUpOnly = guests.filter((g) => g.status === "NEW").length;
-  const bookingRecords = guests.reduce((s, g) => s + g.bookings, 0);
+  const hasBooked = guests.filter(guestHasBooked).length;
+  const neverBooked = guests.filter((g) => !guestHasBooked(g)).length;
   return {
     guestAccounts: guests.length,
-    withBooking,
-    signedUpOnly,
-    bookingRecords,
+    hasBooked,
+    neverBooked,
   };
 }
 

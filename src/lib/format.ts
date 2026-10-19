@@ -20,6 +20,7 @@ const STATUS_LABELS: Record<string, string> = {
   REFUNDED: "Refunded",
   PENDING: "Pending",
   REJECTED: "Rejected",
+  WITHDRAWN: "Withdrawn",
   INVITED: "Invited",
   ACTIVE: "Active",
   INACTIVE: "Inactive",
