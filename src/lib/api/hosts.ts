@@ -2,7 +2,7 @@ import { apiRequest } from "@/lib/api/client";
 
 export type HostApplication = {
   id: string;
-  status: "PENDING" | "APPROVED" | "REJECTED" | string;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "WITHDRAWN" | string;
   contactName: string;
   contactPhone?: string | null;
   contactEmail?: string | null;
@@ -14,6 +14,7 @@ export type HostApplication = {
   businessDetails?: string | null;
   notes?: string | null;
   rejectionReason?: string | null;
+  /** Set when approval created or linked a venue. Never invent this client-side. */
   venueId?: string | null;
   createdAt: string;
   user?: {
@@ -29,6 +30,8 @@ export type HostApplication = {
     name: string;
     city: string;
     area?: string | null;
+    /** Organizing model on the linked venue when the API includes it. */
+    hostedBy?: "NYTO" | "PARTNER" | string | null;
   } | null;
 };
 
