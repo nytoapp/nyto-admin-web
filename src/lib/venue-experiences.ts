@@ -8,6 +8,8 @@ export type StoredNight = {
   tableId?: string;
   name: string;
   diet: string;
+  /** Persisted dietary enum when known. */
+  dietaryType?: "VEGETARIAN" | "NON_VEGETARIAN" | "VEGAN" | null;
   cost: string;
   costPerHead: number;
   categories: ExperienceCategory[];

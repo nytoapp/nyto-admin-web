@@ -21,11 +21,16 @@ import {
 import { listPayments, refundPayment } from "@/lib/api/bookings";
 import { ApiError } from "@/lib/api/client";
 import { confirmDestructive } from "@/lib/console-settings";
-import { formatMoneyInr, statusLabel } from "@/lib/format";
+import { formatMoneyInr, paymentMethodLabel, statusLabel } from "@/lib/format";
 import type { HostedByFilter } from "@/lib/hosted-by";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
 import { mapPaymentRow, type PaymentRow } from "@/lib/mappers";
 import { MOCK_PAYMENTS } from "@/lib/mock/data";
+import {
+  collectPaymentMethodFilterOptions,
+  filterPaymentRows,
+  type PaymentMethodFilter,
+} from "@/lib/payment-method";
 import { useAuth } from "@/providers/auth-provider";
 
 type StatusFilter = "all" | "CAPTURED" | "PENDING" | "FAILED" | "REFUNDED";
@@ -50,6 +55,7 @@ export default function PaymentsPage() {
     parsePaymentStatus(searchParams.get("status")),
   );
   const [hostedBy, setHostedBy] = useState<HostedByFilter>("all");
+  const [method, setMethod] = useState<PaymentMethodFilter>("all");
 
   useEffect(() => {
     setStatus(parsePaymentStatus(searchParams.get("status")));
@@ -77,7 +83,7 @@ export default function PaymentsPage() {
         amountValue: 0,
         venue: p.venue,
         status: p.status === "PENDING_PAYMENT" ? "PENDING" : p.status,
-        method: null,
+        method: p.method ?? null,
         providerRef: null,
         bookingId: null,
         hostedBy: p.hostedBy,
@@ -86,18 +92,21 @@ export default function PaymentsPage() {
     return data ?? [];
   }, [mockMode, data, localRows]);
 
-  const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    return source.filter((p) => {
-      if (status !== "all" && p.status !== status) return false;
-      if (hostedBy !== "all" && p.hostedBy !== hostedBy) return false;
-      if (!needle) return true;
-      return [p.guest, p.venue, p.amount, p.when, p.providerRef, p.method]
-        .join(" ")
-        .toLowerCase()
-        .includes(needle);
-    });
-  }, [q, status, hostedBy, source]);
+  const methodOptions = useMemo(
+    () => collectPaymentMethodFilterOptions(source),
+    [source],
+  );
+
+  const filtered = useMemo(
+    () =>
+      filterPaymentRows(source, {
+        q,
+        status,
+        hostedBy,
+        method,
+      }),
+    [q, status, hostedBy, method, source],
+  );
 
   const capturedTotal = source
     .filter((p) => p.status === "CAPTURED")
@@ -202,8 +211,8 @@ export default function PaymentsPage() {
       ) : null}
 
       <ModuleFilters>
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <div className="min-w-0 flex-1 lg:max-w-[300px]">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:flex-wrap">
+          <div className="min-w-0 flex-1 lg:max-w-[280px]">
             <Input
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -211,6 +220,33 @@ export default function PaymentsPage() {
               aria-label="Search payments"
             />
           </div>
+          <label className="flex items-center gap-2 text-[12px] text-text-muted">
+            <span className="shrink-0 font-semibold uppercase tracking-[0.1em] text-text-faint">
+              Method
+            </span>
+            <select
+              className="h-10 min-w-[148px] rounded-xl border border-border bg-bg px-3 text-[13px] text-ink"
+              value={method}
+              onChange={(e) => setMethod(e.target.value)}
+              aria-label="Payment method"
+            >
+              <option value="all">All methods</option>
+              {methodOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            {method !== "all" ? (
+              <button
+                type="button"
+                onClick={() => setMethod("all")}
+                className="text-[12px] font-semibold text-accent hover:underline"
+              >
+                Reset
+              </button>
+            ) : null}
+          </label>
           <div
             className="flex rounded-xl border border-border bg-bg p-0.5"
             role="group"
@@ -278,16 +314,17 @@ export default function PaymentsPage() {
           description={
             source.length === 0
               ? "Payments appear when a guest starts or completes checkout."
-              : "Try another search or status filter."
+              : "Try another search, status, or method filter."
           }
         />
       ) : (
         <ModuleFeed
           headers={
-            <div className="hidden border-b border-border-subtle px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-faint lg:grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_100px_120px_28px] lg:gap-3">
+            <div className="hidden border-b border-border-subtle px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-faint lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.95fr)_88px_100px_100px_28px] lg:gap-3">
               <span>Guest</span>
               <span>Venue</span>
               <span className="text-right">Amount</span>
+              <span className="text-right">Method</span>
               <span className="text-right">State</span>
               <span />
             </div>
@@ -299,7 +336,7 @@ export default function PaymentsPage() {
               className="nyto-step-in border-b border-border-subtle last:border-0"
               style={{ animationDelay: `${120 + Math.min(i, 10) * 40}ms` }}
             >
-              <ModuleFeedRow className="lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_100px_120px_28px] lg:items-center lg:gap-3">
+              <ModuleFeedRow className="lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.95fr)_88px_100px_100px_28px] lg:items-center lg:gap-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="truncate text-[15px] font-semibold tracking-[-0.02em] text-ink">
@@ -319,23 +356,24 @@ export default function PaymentsPage() {
                     {p.venue}
                   </p>
                   <p className="mt-0.5 text-[12px] text-text-faint">
-                    {p.method ? statusLabel(p.method) : "—"}
                     {p.bookingId ? (
-                      <>
-                        {" · "}
-                        <Link
-                          href={`/bookings/${p.bookingId}`}
-                          className="font-semibold text-accent hover:underline"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          Booking
-                        </Link>
-                      </>
-                    ) : null}
+                      <Link
+                        href={`/bookings/${p.bookingId}`}
+                        className="font-semibold text-accent hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Booking
+                      </Link>
+                    ) : (
+                      "No booking link"
+                    )}
                   </p>
                 </div>
                 <p className="text-[14px] font-semibold tabular-nums text-ink lg:text-right">
                   {p.amount}
+                </p>
+                <p className="text-[12px] text-text-muted lg:text-right">
+                  {paymentMethodLabel(p.method)}
                 </p>
                 <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
                   <Badge tone={statusTone(p.status)}>

@@ -8,7 +8,7 @@ export const MOCK_STATS = {
 export const MOCK_ATTENTION = [
   {
     id: "pending-hosts",
-    label: "1 host application awaiting review",
+    label: "1 request awaiting review",
     href: "/host-applications?status=PENDING",
   },
   {
@@ -109,24 +109,27 @@ export const MOCK_PAYMENTS = [
     amount: "₹2,598",
     venue: "Hitech Terrace",
     status: "CAPTURED",
+    method: "UPI" as const,
     hostedBy: "PARTNER" as const,
   },
   {
     id: "p2",
-    when: "3 Dec · 9:02 PM",
+    when: "3 Oct · 9:02 PM",
     guest: "Rahul M",
     amount: "₹1,299",
     venue: "Jubilee Supper Club",
     status: "CAPTURED",
+    method: "CARD" as const,
     hostedBy: "NYTO" as const,
   },
   {
     id: "p3",
-    when: "5 Dec · 11:40 AM",
+    when: "5 Oct · 11:40 AM",
     guest: "Sai Reddy",
     amount: "₹1,299",
     venue: "SkyGarden Madhapur",
     status: "PENDING_PAYMENT",
+    method: null,
     hostedBy: "NYTO" as const,
   },
 ];

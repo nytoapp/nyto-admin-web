@@ -16,12 +16,16 @@ import type {
 export type BookingRow = {
   id: string;
   guest: string;
+  /** Guest account id when present on the booking payload. */
+  userId: string | null;
   phone: string;
   email: string;
   venue: string;
   venueId: string;
   area: string;
   when: string;
+  /** ISO night start from `table.startsAt` when present; used for journey staging. */
+  startsAtIso: string | null;
   seats: number;
   status: string;
   amount: string;
@@ -39,6 +43,14 @@ export type BookingRow = {
   hostedBy: HostedBy;
   cancelReason: string | null;
   createdAt: string | null;
+  tableId: string | null;
+  /** Menu/experience name when nested on the table payload. */
+  experienceName: string | null;
+  menuId: string | null;
+  /** Seat-price inclusions from the scheduled night (table). */
+  inclusions: string[];
+  paymentType: string | null;
+  seatPrice: number | null;
 };
 
 export type PaymentRow = {
@@ -104,15 +116,23 @@ export function mapBookingRow(b: AdminBooking): BookingRow {
     b.payment?.amount ??
     b.payment?.amountInr ??
     null;
+  const inclusions = Array.isArray(b.table?.inclusions)
+    ? b.table!.inclusions.filter((s) => typeof s === "string" && s.trim())
+    : [];
   return {
     id: b.id,
     guest: guestName(b.user),
+    userId: b.user?.id ?? null,
     phone: b.user?.phone || "—",
     email: b.user?.email || "—",
     venue: b.table?.venue?.name || "—",
-    venueId: b.table?.venue?.id || b.table?.venueId || "",
+    // Prefer scalar table.venueId (always on the booking table row).
+    venueId: String(b.table?.venueId || b.table?.venue?.id || "").trim(),
     area: b.table?.venue?.area || "—",
     when: formatWhen(b.table?.startsAt),
+    startsAtIso: b.table?.startsAt
+      ? String(b.table.startsAt).trim() || null
+      : null,
     seats: b.seatsBooked,
     status: b.status,
     amount: amount != null ? formatMoneyInr(amount) : "—",
@@ -132,6 +152,19 @@ export function mapBookingRow(b: AdminBooking): BookingRow {
     ),
     cancelReason: b.cancelReason ?? null,
     createdAt: b.createdAt ?? null,
+    tableId: b.table?.id != null ? String(b.table.id).trim() || null : null,
+    experienceName: b.table?.menu?.name?.trim() || null,
+    menuId: (() => {
+      const raw = b.table?.menuId ?? b.table?.menu?.id ?? null;
+      if (raw == null) return null;
+      const s = String(raw).trim();
+      return s.length > 0 ? s : null;
+    })(),
+    inclusions,
+    paymentType: b.table?.paymentType ?? null,
+    seatPrice: Number.isFinite(b.table?.seatPrice)
+      ? (b.table!.seatPrice as number)
+      : null,
   };
 }
 
@@ -192,6 +225,7 @@ export function mapExperienceRow(m: VenueMenu) {
   return {
     id: m.id,
     name: m.name,
+    description: m.description?.trim() || null,
     diet: m.dietaryType,
     cost: formatMoneyInr(m.costPerHead),
     costPerHead: m.costPerHead,
