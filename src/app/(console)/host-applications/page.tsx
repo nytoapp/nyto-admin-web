@@ -37,7 +37,7 @@ import { MOCK_HOST_APPS } from "@/lib/mock/data";
 import { useAuth } from "@/providers/auth-provider";
 
 /**
- * Host applications list is loaded with status=ALL.
+ * Requests & Approvals (host applications) list is loaded with status=ALL.
  * Backend may still cap the list — KPI scope is the loaded application set.
  */
 
@@ -134,7 +134,7 @@ function emptyCopy(status: StatusFilter): { title: string; description: string }
     case "PENDING":
       return {
         title: "No applications awaiting review.",
-        description: "New host applications will appear here for approval.",
+        description: "New venue host requests will appear here for approval.",
       };
     case "APPROVED":
       return {
@@ -153,7 +153,7 @@ function emptyCopy(status: StatusFilter): { title: string; description: string }
       };
     default:
       return {
-        title: "No host applications yet.",
+        title: "No requests yet.",
         description: "Applications submitted by hosts will appear in this list.",
       };
   }
@@ -297,7 +297,7 @@ export default function HostApplicationsPage() {
     <div className="nyto-fade">
       <ModuleHero
         eyebrow="Network"
-        title="Host applications"
+        title="Requests & Approvals"
         description="Review Venue-organized onboarding. Approve creates or links a venue through the existing API — venues appear on Venues only after that succeeds."
         stats={[
           {

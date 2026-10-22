@@ -135,7 +135,7 @@ export default function OverviewPage() {
     ) {
       items.push({
         id: "hosts-pending",
-        title: "Host applications awaiting review",
+        title: "Requests awaiting review",
         detail: "Approve to create a Venue-organized venue, or reject.",
         href: "/host-applications?status=PENDING",
         count: hostsPending,

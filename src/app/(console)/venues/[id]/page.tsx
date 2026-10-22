@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Badge } from "@/components/ui/Badge";
+import { Badge, statusTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { FieldError, Input, Label, Select } from "@/components/ui/Field";
 import {
@@ -38,11 +38,19 @@ import { confirmDestructive } from "@/lib/console-settings";
 import { statusLabel } from "@/lib/format";
 import { resolveHostedBy, type HostedBy } from "@/lib/hosted-by";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
+import { experienceDisplayName } from "@/lib/booking-experience";
+import { mapExperienceRow } from "@/lib/mappers";
 import {
-  mapExperienceRow,
-  priceTierFromLocalDatetime,
-  toIsoFromLocalDatetime,
-} from "@/lib/mappers";
+  experienceEditFormValues,
+  kolkataDatetimeLocalToIso,
+  mapTableToNightExperience,
+  nightCapacityLabel,
+  parseDietaryType,
+  selectOverviewDiningNights,
+  type DietaryType,
+  type NightExperienceRow,
+} from "@/lib/venue-experience-form";
+import { resolveNightMenuDisplay } from "@/lib/night-menu-display";
 import {
   loadVenueNights,
   saveVenueNights,
@@ -191,73 +199,67 @@ export default function VenueDetailPage() {
   const active = Boolean(venue.isActive);
   const isNyto = hostedBy === "NYTO";
 
-  const experiences: ExperienceRow[] = mockMode
-    ? (isNyto ? MOCK_EXPERIENCES : MOCK_PARTNER_EXPERIENCES).map((e) => ({
-        id: e.id,
-        name: e.name,
-        diet: e.diet,
-        cost: e.cost,
-        costPerHead: e.costPerHead,
-        categories: [...e.categories] as ExperienceCategory[],
-        when: e.when,
-        capacity: e.capacity,
-        status: "OPEN" as const,
-        fromVenueDashboard: !isNyto,
-      }))
+  const experiences: NightExperienceRow[] = mockMode
+    ? (isNyto ? MOCK_EXPERIENCES : MOCK_PARTNER_EXPERIENCES).map((e, i) => {
+        const dietaryType = parseDietaryType(e.diet);
+        return {
+          id: e.id,
+          menuId: e.id,
+          name: experienceDisplayName(e.name),
+          description: null,
+          dietaryType,
+          diet: dietaryType ? statusLabel(dietaryType) : "Diet unavailable",
+          cost: e.cost,
+          costPerHead: e.costPerHead,
+          categories: [...e.categories] as ExperienceCategory[],
+          inclusions: [],
+          when: e.when,
+          // Demo nights are treated as upcoming for Overview preview.
+          startsAtIso: new Date(
+            Date.now() + (i + 1) * 24 * 60 * 60 * 1000,
+          ).toISOString(),
+          capacity: e.capacity,
+          seatsTaken: null,
+          seatsLeft: null,
+          status: "OPEN" as const,
+          fromVenueDashboard: !isNyto,
+        };
+      })
     : (() => {
         const menus = data?.menus ?? [];
         const tables = data?.tables ?? [];
         if (tables.length > 0) {
           return tables.map((t) => {
-            const menu = menus.find((m) => m.id === t.menuId);
-            const starts = new Date(t.startsAt);
-            const whenLabel = Number.isNaN(starts.getTime())
-              ? "Start time unavailable"
-              : starts
-                  .toLocaleString("en-GB", {
-                    day: "numeric",
-                    month: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    hour12: false,
-                    timeZone: "Asia/Kolkata",
-                  })
-                  .replace(",", " ·");
-            const status = String(t.status ?? "").toUpperCase();
-            return {
-              id: t.menuId || t.id,
-              name: menu?.name || t.menu?.name || "Experience",
-              diet:
-                menu?.diet ||
-                (t.menu?.dietaryType
-                  ? statusLabel(t.menu.dietaryType)
-                  : "Diet unavailable"),
-              cost: Number.isFinite(t.seatPrice)
-                ? `₹${t.seatPrice.toLocaleString("en-IN")}`
-                : (menu?.cost ?? "Price unavailable"),
-              costPerHead: Number.isFinite(t.seatPrice)
-                ? t.seatPrice
-                : menu?.costPerHead,
-              categories: [] as ExperienceCategory[],
-              when: whenLabel,
-              capacity: Number.isFinite(t.capacity) ? t.capacity : undefined,
-              status:
-                status === "CANCELLED"
-                  ? ("CANCELLED" as const)
-                  : ("OPEN" as const),
-              tableId: t.id,
+            const menu = t.menuId
+              ? menus.find((m) => m.id === t.menuId)
+              : undefined;
+            return mapTableToNightExperience(t, menu ?? t.menu ?? null, {
               fromVenueDashboard: !isNyto,
-            };
+            });
           });
         }
-        return menus.map((m) => ({
-          ...m,
-          categories: [] as ExperienceCategory[],
-          when: "No dining nights scheduled",
-          capacity: undefined as number | undefined,
-          status: "OPEN" as const,
-          fromVenueDashboard: !isNyto,
-        }));
+        return menus.map((m) => {
+          const dietaryType = parseDietaryType(m.diet);
+          return {
+            id: m.id,
+            menuId: m.id,
+            name: experienceDisplayName(m.name),
+            description: m.description ?? null,
+            dietaryType,
+            diet: dietaryType ? statusLabel(dietaryType) : "Diet unavailable",
+            cost: m.cost,
+            costPerHead: m.costPerHead,
+            categories: [] as ExperienceCategory[],
+            inclusions: [] as string[],
+            when: "No dining nights scheduled",
+            startsAtIso: null as string | null,
+            capacity: undefined as number | undefined,
+            seatsTaken: null,
+            seatsLeft: null,
+            status: "OPEN" as const,
+            fromVenueDashboard: !isNyto,
+          };
+        });
       })();
 
   return (
@@ -317,6 +319,18 @@ export default function VenueDetailPage() {
         </div>
       ) : null}
 
+      <p className="mb-5 rounded-xl border border-border-subtle bg-bg/30 px-4 py-3 text-[12px] leading-relaxed text-text-faint">
+        Venue-related complaints are not on admin APIs yet. Guest journey staging
+        from the bookings feed is on{" "}
+        <Link
+          href="/guest-experience"
+          className="font-semibold text-accent hover:underline"
+        >
+          Guest Experience
+        </Link>
+        .
+      </p>
+
       <div className="mb-6 flex flex-wrap gap-1 rounded-xl border border-border bg-bg-elevated/80 p-1">
         {(
           [
@@ -356,10 +370,9 @@ export default function VenueDetailPage() {
               label="Upcoming dining nights"
               value={String(
                 mockMode
-                  ? experiences.filter(
-                      (e) => e.when !== "—" && e.status !== "CANCELLED",
-                    ).length
-                  : (data?.upcomingDiningNights ?? 0),
+                  ? selectOverviewDiningNights(experiences).totalUpcoming
+                  : (data?.upcomingDiningNights ??
+                    selectOverviewDiningNights(experiences).totalUpcoming),
               )}
               accent="neutral"
             />
@@ -369,6 +382,15 @@ export default function VenueDetailPage() {
               accent="success"
             />
           </div>
+
+          <OverviewDiningNights
+            nights={experiences}
+            mockMode={mockMode}
+            loading={!mockMode && loading && !data}
+            error={error}
+            onRetry={() => void reload()}
+            onViewAll={() => setTab("experiences")}
+          />
 
           <EditVenueForm
             venueId={venueId}
@@ -408,6 +430,235 @@ export default function VenueDetailPage() {
         </Link>
       </p>
     </div>
+  );
+}
+
+function InclusionCheckIcon() {
+  return (
+    <span
+      className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border bg-bg-soft text-accent"
+      aria-hidden
+    >
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path
+          d="M2.5 6.2 4.8 8.5 9.5 3.5"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
+  );
+}
+
+function OverviewDiningNights({
+  nights,
+  mockMode,
+  loading,
+  error,
+  onRetry,
+  onViewAll,
+}: {
+  nights: NightExperienceRow[];
+  mockMode: boolean;
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
+  onViewAll: () => void;
+}) {
+  const { nights: preview, totalUpcoming, truncated } =
+    selectOverviewDiningNights(nights, { limit: 6 });
+
+  return (
+    <section className="nyto-panel overflow-hidden">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border-subtle px-5 py-4">
+        <div className="min-w-0">
+          <h3 className="text-[15px] font-semibold text-ink">
+            Upcoming Dining Nights
+          </h3>
+          <p className="mt-1 text-[13px] text-text-muted">
+            See what guests can book at this venue and what each seat includes.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onViewAll}
+          className="shrink-0 text-[13px] font-semibold text-accent hover:underline"
+        >
+          Open Experiences →
+        </button>
+      </div>
+
+      {error && !loading && preview.length === 0 ? (
+        <div className="px-5 py-4">
+          <ErrorBanner
+            message="Dining nights could not be loaded."
+            onRetry={onRetry}
+          />
+        </div>
+      ) : loading ? (
+        <div className="space-y-0">
+          <Skeleton className="h-28 rounded-none" />
+          <Skeleton className="h-28 rounded-none opacity-70" />
+        </div>
+      ) : preview.length === 0 ? (
+        <div className="px-5 py-10 text-center">
+          <p className="text-[15px] font-semibold text-ink">
+            No dining nights published yet
+          </p>
+          <p className="mx-auto mt-1.5 max-w-md text-[13px] text-text-muted">
+            Publish a night on the Experiences tab to show guests what they can
+            book here.
+          </p>
+          <button
+            type="button"
+            onClick={onViewAll}
+            className="mt-4 text-[13px] font-semibold text-accent hover:underline"
+          >
+            Go to Experiences →
+          </button>
+        </div>
+      ) : (
+        <ul className="divide-y divide-border-subtle">
+          {preview.map((n) => {
+            const capacityLine = nightCapacityLabel(n);
+            const menuDisplay = resolveNightMenuDisplay({
+              mockMode,
+              inclusions: n.inclusions,
+              menu: n.menuPayload,
+            });
+            return (
+              <li key={n.id} className="px-5 py-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-[16px] font-semibold tracking-[-0.02em] text-ink">
+                        {n.name}
+                      </p>
+                      {n.categories.map((c) => (
+                        <Badge key={c} tone="neutral">
+                          {categoryLabel(c)}
+                        </Badge>
+                      ))}
+                      {n.status ? (
+                        <Badge tone={statusTone(n.status)}>
+                          {statusLabel(n.status)}
+                        </Badge>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="shrink-0 sm:min-w-[7.5rem] sm:text-right">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-faint">
+                      Per seat
+                    </p>
+                    <p className="mt-0.5 font-display text-[26px] font-medium tabular-nums leading-none tracking-[-0.03em] text-ink">
+                      {n.costPerHead != null && Number.isFinite(n.costPerHead)
+                        ? n.cost
+                        : "Price unavailable"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 border-t border-border-subtle pt-4">
+                  {menuDisplay.source === "demo" ||
+                  menuDisplay.source === "api_dishes" ? (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-[13px] font-semibold tracking-[-0.01em] text-ink">
+                          What&apos;s on the menu
+                        </p>
+                        {menuDisplay.source === "demo" ? (
+                          <span className="rounded-md border border-warning/35 bg-warning/[0.08] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-warning">
+                            Demo menu
+                          </span>
+                        ) : null}
+                      </div>
+                      {menuDisplay.source === "demo" ? (
+                        <p className="mt-1.5 text-[12px] leading-snug text-text-faint">
+                          Illustrative dishes for demo only — not a confirmed
+                          venue offering.
+                        </p>
+                      ) : null}
+                      <div className="mt-3 space-y-4">
+                        {menuDisplay.courses.map((group) => (
+                          <div key={group.course}>
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-faint">
+                              {group.course}
+                            </p>
+                            <ul className="mt-2 space-y-2">
+                              {group.items.map((item) => (
+                                <li
+                                  key={`${group.course}-${item}`}
+                                  className="flex items-start gap-3"
+                                >
+                                  <InclusionCheckIcon />
+                                  <span className="min-w-0 pt-0.5 text-[15px] font-medium leading-snug tracking-[-0.01em] text-ink">
+                                    {item}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : menuDisplay.source === "generic_inclusions" ? (
+                    <>
+                      <p className="text-[13px] font-semibold tracking-[-0.01em] text-ink">
+                        What&apos;s included in your seat
+                      </p>
+                      <ul className="mt-3 space-y-2.5">
+                        {menuDisplay.genericInclusions.map((item) => (
+                          <li key={item} className="flex items-start gap-3">
+                            <InclusionCheckIcon />
+                            <span className="min-w-0 pt-0.5 text-[15px] font-medium leading-snug tracking-[-0.01em] text-ink">
+                              {item}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-[13px] font-semibold tracking-[-0.01em] text-ink">
+                        What&apos;s on the menu
+                      </p>
+                      <p className="mt-2.5 text-[14px] leading-snug text-text-muted">
+                        Detailed menu not provided
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-text-muted">
+                  <span>{n.when}</span>
+                  <span>
+                    {n.dietaryType
+                      ? n.diet
+                      : "Dietary information unavailable"}
+                  </span>
+                  {capacityLine ? <span>{capacityLine}</span> : null}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {truncated ? (
+        <div className="border-t border-border-subtle px-5 py-3 text-[12px] text-text-faint">
+          Showing {preview.length} of {totalUpcoming} upcoming nights.{" "}
+          <button
+            type="button"
+            onClick={onViewAll}
+            className="font-semibold text-accent hover:underline"
+          >
+            View all on Experiences
+          </button>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -603,19 +854,23 @@ function EditVenueForm({
   );
 }
 
-type ExperienceRow = {
-  id: string;
-  name: string;
-  diet: string;
-  cost: string;
-  costPerHead?: number;
-  categories: ExperienceCategory[];
-  when: string;
-  capacity?: number;
-  status?: "OPEN" | "FULL" | "CANCELLED";
-  tableId?: string;
-  fromVenueDashboard?: boolean;
-};
+function toStoredNight(r: NightExperienceRow): StoredNight {
+  return {
+    id: r.id,
+    menuId: r.menuId ?? undefined,
+    tableId: r.tableId,
+    name: r.name,
+    diet: r.diet,
+    dietaryType: r.dietaryType,
+    cost: r.cost,
+    costPerHead: r.costPerHead ?? 0,
+    categories: r.categories,
+    when: r.when,
+    startsAtIso: r.startsAtIso ?? undefined,
+    capacity: r.capacity ?? 6,
+    status: r.status ?? "OPEN",
+  };
+}
 
 function ExperiencesPanel({
   venueId,
@@ -627,7 +882,7 @@ function ExperiencesPanel({
   venueId: string;
   mockMode: boolean;
   hostedBy: HostedBy;
-  initial: ExperienceRow[];
+  initial: NightExperienceRow[];
   onChanged: () => void;
 }) {
   const { getToken } = useAuth();
@@ -636,7 +891,8 @@ function ExperiencesPanel({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [cost, setCost] = useState("");
-  const [diet, setDiet] = useState("NON_VEGETARIAN");
+  /** Empty string = no persisted dietary value (edit). Default for publish only. */
+  const [diet, setDiet] = useState<DietaryType | "">("NON_VEGETARIAN");
   const [categories, setCategories] = useState<ExperienceCategory[]>([
     "WEEKLY",
   ]);
@@ -649,66 +905,62 @@ function ExperiencesPanel({
   const canEdit = hostedBy === "NYTO";
 
   useEffect(() => {
+    const byTable = new Map(
+      initial
+        .filter((r) => r.tableId)
+        .map((r) => [r.tableId as string, r] as const),
+    );
+    const byId = new Map(initial.map((r) => [r.id, r] as const));
     const stored = loadVenueNights(venueId);
-    if (stored.length > 0) {
-      setRows(
-        stored.map((n) => ({
-          id: n.id,
-          name: n.name,
-          diet: n.diet,
-          cost: n.cost,
-          costPerHead: n.costPerHead,
-          categories: n.categories,
-          when: n.when,
-          capacity: n.capacity,
-          status: n.status,
-          tableId: n.tableId,
-          fromVenueDashboard: hostedBy === "PARTNER",
-        })),
-      );
+
+    // Prefer live API rows when present so localStorage cannot invent diet/time/name.
+    if (initial.length > 0) {
+      setRows(initial);
+      saveVenueNights(venueId, initial.map(toStoredNight));
       return;
     }
-    setRows(initial);
-    if (initial.length > 0) {
-      saveVenueNights(
-        venueId,
-        initial.map(
-          (r): StoredNight => ({
-            id: r.id,
-            name: r.name,
-            diet: r.diet,
-            cost: r.cost,
-            costPerHead: r.costPerHead ?? 0,
-            categories: r.categories,
-            when: r.when,
-            capacity: r.capacity ?? 6,
-            status: r.status ?? "OPEN",
-            tableId: r.tableId,
-          }),
-        ),
+
+    if (stored.length > 0) {
+      setRows(
+        stored.map((n) => {
+          const live =
+            (n.tableId ? byTable.get(n.tableId) : undefined) ?? byId.get(n.id);
+          const dietaryType =
+            live?.dietaryType ??
+            parseDietaryType(n.dietaryType) ??
+            parseDietaryType(n.diet);
+          return {
+            id: n.id,
+            menuId: live?.menuId ?? n.menuId ?? null,
+            name: live?.name || experienceDisplayName(n.name),
+            description: live?.description ?? null,
+            dietaryType,
+            diet: dietaryType
+              ? statusLabel(dietaryType)
+              : live?.diet || "Diet unavailable",
+            cost: live?.cost || n.cost,
+            costPerHead: live?.costPerHead ?? n.costPerHead,
+            categories: live?.categories?.length
+              ? live.categories
+              : n.categories,
+            inclusions: live?.inclusions ?? [],
+            when: live?.when || n.when,
+            startsAtIso: live?.startsAtIso ?? n.startsAtIso ?? null,
+            capacity: live?.capacity ?? n.capacity,
+            status: live?.status ?? n.status,
+            tableId: n.tableId ?? live?.tableId,
+            fromVenueDashboard: hostedBy === "PARTNER",
+          } satisfies NightExperienceRow;
+        }),
       );
+    } else {
+      setRows(initial);
     }
   }, [initial, venueId, hostedBy]);
 
-  function persistRows(next: ExperienceRow[]) {
+  function persistRows(next: NightExperienceRow[]) {
     setRows(next);
-    saveVenueNights(
-      venueId,
-      next.map(
-        (r): StoredNight => ({
-          id: r.id,
-          name: r.name,
-          diet: r.diet,
-          cost: r.cost,
-          costPerHead: r.costPerHead ?? 0,
-          categories: r.categories,
-          when: r.when,
-          capacity: r.capacity ?? 6,
-          status: r.status ?? "OPEN",
-          tableId: r.tableId,
-        }),
-      ),
-    );
+    saveVenueNights(venueId, next.map(toStoredNight));
   }
 
   function resetForm() {
@@ -722,26 +974,26 @@ function ExperiencesPanel({
     setError(null);
   }
 
-  function startEdit(row: ExperienceRow) {
+  function startEdit(row: NightExperienceRow) {
     if (!canEdit || row.status === "CANCELLED") return;
+    const values = experienceEditFormValues(row);
     setEditingId(row.id);
-    setName(row.name);
-    setCost(
-      row.costPerHead != null && Number.isFinite(row.costPerHead)
-        ? String(row.costPerHead)
-        : "",
-    );
-    setDiet(row.diet);
-    setCategories(
-      row.categories.length > 0 ? [...row.categories] : ["WEEKLY"],
-    );
-    setCapacity(row.capacity != null ? String(row.capacity) : "");
-    setStartsAt("");
+    setName(values.name);
+    setCost(values.cost);
+    setDiet(values.dietaryType);
+    setCategories(values.categories);
+    setCapacity(values.capacity);
+    setStartsAt(values.startsAt);
     setError(null);
   }
 
-  function formatWhenLabel(value: string) {
-    const when = new Date(value);
+  function formatWhenLabel(isoOrLocal: string) {
+    const iso = isoOrLocal.includes("T")
+      ? isoOrLocal.includes("+") || isoOrLocal.endsWith("Z")
+        ? isoOrLocal
+        : kolkataDatetimeLocalToIso(isoOrLocal)
+      : isoOrLocal;
+    const when = new Date(iso);
     if (Number.isNaN(when.getTime())) return "—";
     return when
       .toLocaleString("en-GB", {
@@ -776,6 +1028,10 @@ function ExperiencesPanel({
       setError("Pick a start time for this night.");
       return;
     }
+    if (!editingId && !parseDietaryType(diet)) {
+      setError("Pick a dietary type for this night.");
+      return;
+    }
     const costPerHead = Number(cost);
     if (!Number.isFinite(costPerHead) || costPerHead < 0) {
       setError("Seat price must be a valid number.");
@@ -790,8 +1046,13 @@ function ExperiencesPanel({
     setSyncNote(null);
     setBusy(true);
     try {
-      const whenLabel = startsAt ? formatWhenLabel(startsAt) : undefined;
+      const startsAtIso = startsAt ? kolkataDatetimeLocalToIso(startsAt) : null;
+      const whenLabel = startsAtIso ? formatWhenLabel(startsAtIso) : undefined;
       const costLabel = `₹${costPerHead.toLocaleString("en-IN")}`;
+      const dietaryType = parseDietaryType(diet);
+      const dietLabel = dietaryType
+        ? statusLabel(dietaryType)
+        : "Diet unavailable";
 
       if (mockMode) {
         if (editingId) {
@@ -800,26 +1061,33 @@ function ExperiencesPanel({
               r.id === editingId
                 ? {
                     ...r,
-                    name: name.trim(),
-                    diet,
+                    name: name.trim() || experienceDisplayName(null),
+                    dietaryType: dietaryType ?? r.dietaryType,
+                    diet: dietaryType ? dietLabel : r.diet,
                     cost: costLabel,
                     costPerHead,
                     categories: [...categories],
                     when: whenLabel ?? r.when,
+                    startsAtIso: startsAtIso ?? r.startsAtIso,
                     capacity: cap,
                   }
                 : r,
             ),
           );
         } else {
-          const night: ExperienceRow = {
+          const night: NightExperienceRow = {
             id: `e-${Date.now()}`,
-            name: name.trim(),
-            diet,
+            menuId: null,
+            name: name.trim() || experienceDisplayName(null),
+            description: null,
+            dietaryType,
+            diet: dietLabel,
             cost: costLabel,
             costPerHead,
             categories: [...categories],
+            inclusions: [],
             when: whenLabel || "—",
+            startsAtIso,
             capacity: cap,
             status: "OPEN",
           };
@@ -832,30 +1100,37 @@ function ExperiencesPanel({
 
       const token = await getToken();
       if (!token) throw new ApiError("Session expired.", 401);
-      const body = {
-        name: name.trim(),
-        dietaryType: diet as "VEGETARIAN" | "NON_VEGETARIAN" | "VEGAN",
-        costPerHead,
-      };
+      const existing = editingId
+        ? rows.find((r) => r.id === editingId)
+        : undefined;
+      const menuPatchId = existing?.menuId ?? null;
 
       if (editingId) {
-        await patchVenueMenu(token, editingId, body);
-        const existing = rows.find((r) => r.id === editingId);
+        // Only patch a real menu id — never send invented dietary defaults.
+        if (menuPatchId && (name.trim() || dietaryType != null || costPerHead >= 0)) {
+          const body: {
+            name?: string;
+            dietaryType?: DietaryType;
+            costPerHead?: number;
+          } = { costPerHead };
+          if (name.trim()) body.name = name.trim();
+          if (dietaryType) body.dietaryType = dietaryType;
+          await patchVenueMenu(token, menuPatchId, body);
+        }
         upsertVenueNight(venueId, {
           id: editingId,
-          name: name.trim(),
-          diet,
+          name: name.trim() || existing?.name || experienceDisplayName(null),
+          diet: dietaryType ? dietLabel : (existing?.diet ?? "Diet unavailable"),
+          dietaryType: dietaryType ?? existing?.dietaryType ?? null,
           cost: costLabel,
           costPerHead,
           categories: [...categories],
           when: whenLabel ?? existing?.when ?? "—",
-          startsAtIso: startsAt
-            ? toIsoFromLocalDatetime(startsAt)
-            : undefined,
+          startsAtIso: startsAtIso ?? existing?.startsAtIso ?? undefined,
           capacity: cap,
           status: existing?.status ?? "OPEN",
           tableId: existing?.tableId,
-          menuId: editingId,
+          menuId: menuPatchId ?? undefined,
         });
         setSyncNote("Saved — live on the NYTO app.");
         resetForm();
@@ -863,12 +1138,25 @@ function ExperiencesPanel({
         return;
       }
 
-      const menuRes = await createVenueMenu(token, venueId, body);
+      if (!dietaryType || !startsAtIso) {
+        setError("Dietary type and start time are required to publish.");
+        return;
+      }
+
+      const hour = Number(startsAt.slice(11, 13));
+      const priceTier =
+        Number.isFinite(hour) && hour < 16 ? "DAYTIME" : "EVENING";
+
+      const menuRes = await createVenueMenu(token, venueId, {
+        name: name.trim(),
+        dietaryType,
+        costPerHead,
+      });
       const tableRes = await createVenueTable(token, venueId, {
-        startsAt: toIsoFromLocalDatetime(startsAt),
+        startsAt: startsAtIso,
         seatPrice: costPerHead,
         capacity: cap,
-        priceTier: priceTierFromLocalDatetime(startsAt),
+        priceTier,
         tableType: categories[0],
         menuId: menuRes.menu.id,
         status: "OPEN",
@@ -877,16 +1165,17 @@ function ExperiencesPanel({
       });
 
       upsertVenueNight(venueId, {
-        id: menuRes.menu.id,
+        id: tableRes.table.id,
         menuId: menuRes.menu.id,
         tableId: tableRes.table.id,
         name: name.trim(),
-        diet,
+        diet: dietLabel,
+        dietaryType,
         cost: costLabel,
         costPerHead,
         categories: [...categories],
         when: whenLabel || "—",
-        startsAtIso: toIsoFromLocalDatetime(startsAt),
+        startsAtIso,
         capacity: cap,
         status: "OPEN",
       });
@@ -907,7 +1196,7 @@ function ExperiencesPanel({
     }
   }
 
-  async function onCancelNight(row: ExperienceRow) {
+  async function onCancelNight(row: NightExperienceRow) {
     if (hostedBy !== "NYTO" || !canEdit) return;
     if (row.status === "CANCELLED") return;
     if (
@@ -985,6 +1274,20 @@ function ExperiencesPanel({
                     <tr key={m.id}>
                       <td>
                         <div className="font-medium text-ink">{m.name}</div>
+                        {m.description ? (
+                          <p className="mt-0.5 max-w-[240px] text-[12px] leading-snug text-text-faint">
+                            {m.description}
+                          </p>
+                        ) : null}
+                        {m.inclusions && m.inclusions.length > 0 ? (
+                          <p className="mt-1 max-w-[240px] text-[11px] leading-snug text-text-muted">
+                            Includes · {m.inclusions.join(" · ")}
+                          </p>
+                        ) : (
+                          <p className="mt-1 text-[11px] text-text-faint">
+                            Inclusions unavailable
+                          </p>
+                        )}
                         {m.status === "CANCELLED" ? (
                           <Badge tone="danger">Cancelled</Badge>
                         ) : m.status ? (
@@ -1090,7 +1393,15 @@ function ExperiencesPanel({
           </div>
           <div>
             <Label>Dietary</Label>
-            <Select value={diet} onChange={(e) => setDiet(e.target.value)}>
+            <Select
+              value={diet}
+              onChange={(e) =>
+                setDiet(e.target.value as DietaryType | "")
+              }
+            >
+              {diet === "" ? (
+                <option value="">Diet unavailable</option>
+              ) : null}
               <option value="NON_VEGETARIAN">Non-vegetarian</option>
               <option value="VEGETARIAN">Vegetarian</option>
               <option value="VEGAN">Vegan</option>

@@ -16,13 +16,14 @@ const NAV_GROUPS = [
     items: [
       { href: "/venues", label: "Venues" },
       { href: "/bookings", label: "Bookings" },
+      { href: "/guest-experience", label: "Guest Experience" },
       { href: "/payments", label: "Payments" },
     ],
   },
   {
     label: "Network",
     items: [
-      { href: "/host-applications", label: "Host applications" },
+      { href: "/host-applications", label: "Requests & Approvals" },
       { href: "/guests", label: "Guests" },
     ],
   },

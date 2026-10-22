@@ -17,9 +17,15 @@ import {
   refundPayment,
 } from "@/lib/api/bookings";
 import { ApiError } from "@/lib/api/client";
+import { listTableBookings } from "@/lib/api/tables";
+import {
+  experienceDisplayName,
+  resolveMenuForBooking,
+} from "@/lib/booking-experience";
 import { categoryLabel } from "@/lib/categories";
 import { confirmDestructive } from "@/lib/console-settings";
-import { statusLabel } from "@/lib/format";
+import { guestName, paymentMethodLabel, statusLabel } from "@/lib/format";
+import { attendanceDisplayLabel } from "@/lib/guest-experience";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
 import { mapBookingRow, type BookingRow } from "@/lib/mappers";
 import { MOCK_BOOKINGS } from "@/lib/mock/data";
@@ -54,20 +60,22 @@ function mockDetail(id: string): BookingRow | null {
   return {
     id: b.id,
     guest: b.guest,
+    userId: null,
     phone: b.phone,
     email: b.email ?? "—",
     venue: b.venue,
     venueId: b.venueId,
     area: b.area ?? "—",
     when: b.when,
+    startsAtIso: null,
     seats: b.seats,
     status: b.status,
     amount: b.amount ?? "—",
     amountValue: null,
     paymentId: b.paymentId ?? null,
     paymentStatus: b.paymentStatus ?? null,
-    paymentMethod: "UPI",
-    paymentRef: "demo_pay_ref",
+    paymentMethod: null,
+    paymentRef: null,
     checkInCode: b.checkInCode ?? null,
     bookingType: null,
     tableType: b.tableType ?? null,
@@ -76,6 +84,12 @@ function mockDetail(id: string): BookingRow | null {
     hostedBy: b.hostedBy,
     cancelReason: b.status === "CANCELLED" ? "Guest cancelled" : null,
     createdAt: null,
+    tableId: null,
+    experienceName: "3-course dinner",
+    menuId: null,
+    inclusions: ["3-course dinner", "Welcome drink"],
+    paymentType: "ALL_INCLUSIVE",
+    seatPrice: null,
   };
 }
 
@@ -96,6 +110,39 @@ export default function BookingDetailPage() {
       return mapBookingRow(res.booking);
     },
     [bookingId],
+  );
+
+  const bookingForExtras = local ?? data;
+
+  const { data: menuMeta } = useAdminResource(
+    !mockMode && Boolean(bookingForExtras),
+    async (token) => {
+      if (!bookingForExtras) return { name: null, description: null };
+      return resolveMenuForBooking(token, bookingForExtras);
+    },
+    [
+      bookingForExtras?.id,
+      bookingForExtras?.venueId,
+      bookingForExtras?.menuId,
+      bookingForExtras?.experienceName,
+    ],
+  );
+
+  const { data: tablePeers } = useAdminResource(
+    !mockMode && Boolean(bookingForExtras?.tableId),
+    async (token) => {
+      if (!bookingForExtras?.tableId) return [];
+      const res = await listTableBookings(token, bookingForExtras.tableId);
+      return res.bookings
+        .filter((b) => b.id !== bookingForExtras.id)
+        .map((b) => ({
+          id: b.id,
+          guest: guestName(b.user),
+          status: b.status,
+          seats: b.seatsBooked,
+        }));
+    },
+    [bookingForExtras?.tableId, bookingForExtras?.id],
   );
 
   useEffect(() => {
@@ -234,8 +281,8 @@ export default function BookingDetailPage() {
     Boolean(booking.paymentId) && booking.paymentStatus === "CAPTURED";
   const cancelNote = cleanCancelReason(booking.cancelReason);
   const methodLabel = booking.paymentMethod
-    ? statusLabel(booking.paymentMethod)
-    : "—";
+    ? paymentMethodLabel(booking.paymentMethod)
+    : "Unknown";
   const isSettled =
     booking.status === "CANCELLED" || booking.status === "NO_SHOW";
   const seatsLine =
@@ -362,6 +409,31 @@ export default function BookingDetailPage() {
         </div>
       ) : null}
 
+      <section className="mt-4 overflow-hidden rounded-2xl border border-border bg-bg-elevated/70 shadow-[var(--shadow-sm)]">
+        <div className="border-b border-border-subtle px-5 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-faint">
+            Attendance & guest experience
+          </p>
+        </div>
+        <div className="px-5 py-4">
+          <p className="text-[13px] font-medium text-ink">
+            {attendanceDisplayLabel(booking.status)}
+          </p>
+          <p className="mt-1.5 text-[12px] leading-relaxed text-text-muted">
+            Booking status is not physical door check-in. Arrival confirmation
+            (TableMember.attended) is not on admin APIs. Related complaints,
+            follow-ups, and feedback are not available yet — see{" "}
+            <Link
+              href="/guest-experience"
+              className="font-semibold text-accent hover:underline"
+            >
+              Guest Experience
+            </Link>
+            .
+          </p>
+        </div>
+      </section>
+
       {/* Dossier — guest + payment as one board */}
       <section className="nyto-dossier mt-4 overflow-hidden rounded-2xl border border-border bg-bg-elevated/70 shadow-[var(--shadow-sm)]">
         <div className="grid lg:grid-cols-2">
@@ -399,7 +471,9 @@ export default function BookingDetailPage() {
               <DossierRow
                 label="Method"
                 value={
-                  booking.paymentMethod ? methodLabel : "Method unavailable"
+                  booking.paymentStatus || booking.paymentMethod
+                    ? methodLabel
+                    : "Unknown"
                 }
               />
               <DossierRow
@@ -413,6 +487,129 @@ export default function BookingDetailPage() {
           </div>
         </div>
       </section>
+
+      {/* What the seat price includes — from scheduled night + optional menu copy */}
+      <section className="mt-4 overflow-hidden rounded-2xl border border-border bg-bg-elevated/70 shadow-[var(--shadow-sm)]">
+        <div className="p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-faint">
+            Experience · included with seat
+          </p>
+          <p className="mt-2 text-[16px] font-semibold tracking-[-0.02em] text-ink">
+            {experienceDisplayName(
+              booking.experienceName || menuMeta?.name,
+            )}
+          </p>
+          {menuMeta?.description ? (
+            <p className="mt-1.5 text-[13px] leading-relaxed text-text-muted">
+              {menuMeta.description}
+            </p>
+          ) : null}
+          <dl className="mt-4 space-y-0">
+            <DossierRow
+              label="Seat price"
+              value={
+                booking.seatPrice != null
+                  ? `₹${booking.seatPrice.toLocaleString("en-IN")}`
+                  : booking.amount
+              }
+            />
+            <DossierRow
+              label="Bill type"
+              value={
+                booking.paymentType
+                  ? statusLabel(booking.paymentType)
+                  : "Unavailable"
+              }
+            />
+            <DossierRow
+              label="Category"
+              value={
+                booking.tableType
+                  ? categoryLabel(booking.tableType)
+                  : "Unavailable"
+              }
+              last={booking.inclusions.length === 0}
+            />
+            {booking.inclusions.length > 0 ? (
+              <div className="grid grid-cols-[88px_minmax(0,1fr)] items-start gap-3 py-2.5">
+                <dt className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-faint">
+                  Includes
+                </dt>
+                <dd className="min-w-0">
+                  <ul className="flex flex-wrap gap-1.5">
+                    {booking.inclusions.map((item) => (
+                      <li key={item}>
+                        <Badge tone="neutral">{item}</Badge>
+                      </li>
+                    ))}
+                  </ul>
+                </dd>
+              </div>
+            ) : (
+              <p className="pt-2 text-[12px] text-text-faint">
+                No inclusion list on this night record.
+              </p>
+            )}
+          </dl>
+          {booking.userId ? (
+            <p className="mt-4 border-t border-border-subtle pt-3 text-[13px]">
+              <Link
+                href={`/guests/${booking.userId}`}
+                className="font-semibold text-accent hover:underline"
+              >
+                Open guest history →
+              </Link>
+            </p>
+          ) : null}
+        </div>
+      </section>
+
+      {/* Co-bookings on the same table — not proof of interaction */}
+      {!mockMode && booking.tableId ? (
+        <section className="mt-4 overflow-hidden rounded-2xl border border-border bg-bg-elevated/70 shadow-[var(--shadow-sm)]">
+          <div className="p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-faint">
+              Shared table
+            </p>
+            <p className="mt-1 text-[13px] text-text-muted">
+              Other bookings returned for this table. Same table ≠ verified
+              attendance together, and does not imply interaction or friendship.
+            </p>
+            {!tablePeers ? (
+              <p className="mt-3 text-[13px] text-text-faint">Loading…</p>
+            ) : tablePeers.length === 0 ? (
+              <p className="mt-3 text-[13px] text-text-faint">
+                No other bookings were returned for this table. That does not
+                mean this guest dined alone.
+              </p>
+            ) : (
+              <ul className="mt-3 divide-y divide-border-subtle">
+                {tablePeers.map((peer) => (
+                  <li
+                    key={peer.id}
+                    className="flex items-center justify-between gap-3 py-2.5"
+                  >
+                    <div className="min-w-0">
+                      <Link
+                        href={`/bookings/${peer.id}`}
+                        className="truncate text-[14px] font-semibold text-ink hover:text-accent"
+                      >
+                        {peer.guest}
+                      </Link>
+                      <p className="text-[12px] text-text-faint">
+                        {peer.seats} seat{peer.seats === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                    <Badge tone={statusTone(peer.status)}>
+                      {statusLabel(peer.status)}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+      ) : null}
 
       {/* Venue — whole strip clickable */}
       {booking.venueId ? (

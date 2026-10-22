@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Field";
 import {
@@ -49,6 +50,7 @@ function displayEmail(raw: string | null | undefined): string {
 
 export default function GuestsPage() {
   const { mockMode } = useAuth();
+  const router = useRouter();
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [filter, setFilter] = useState<GuestFilter>("all");
@@ -226,44 +228,50 @@ export default function GuestsPage() {
                 className="nyto-step-in border-b border-border-subtle last:border-0"
                 style={{ animationDelay: `${120 + Math.min(i, 10) * 40}ms` }}
               >
-                <ModuleFeedRow className="md:grid-cols-[minmax(0,1.4fr)_minmax(0,1.35fr)_88px_minmax(0,1.15fr)_120px] md:items-center md:gap-4">
-                  <div className="min-w-0">
-                    <p className="truncate text-[15px] font-semibold tracking-[-0.02em] text-ink">
-                      {g.name}
-                    </p>
-                    <p className="mt-1 truncate text-[12px] text-text-faint md:hidden">
-                      {g.phone !== "—" ? g.phone : g.email}
-                    </p>
-                  </div>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/guests/${g.id}`)}
+                  className="w-full text-left transition hover:bg-bg-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--ring)]"
+                >
+                  <ModuleFeedRow className="md:grid-cols-[minmax(0,1.4fr)_minmax(0,1.35fr)_88px_minmax(0,1.15fr)_120px] md:items-center md:gap-4">
+                    <div className="min-w-0">
+                      <p className="truncate text-[15px] font-semibold tracking-[-0.02em] text-ink">
+                        {g.name}
+                      </p>
+                      <p className="mt-1 truncate text-[12px] text-text-faint md:hidden">
+                        {g.phone !== "—" ? g.phone : g.email}
+                      </p>
+                    </div>
 
-                  <div className="hidden min-w-0 md:block">
-                    <p className="truncate text-[13px] text-text-muted">
-                      {g.phone}
-                    </p>
-                    <p className="mt-0.5 truncate text-[12px] text-text-faint">
-                      {g.email}
-                    </p>
-                  </div>
+                    <div className="hidden min-w-0 md:block">
+                      <p className="truncate text-[13px] text-text-muted">
+                        {g.phone}
+                      </p>
+                      <p className="mt-0.5 truncate text-[12px] text-text-faint">
+                        {g.email}
+                      </p>
+                    </div>
 
-                  <div className="md:text-center">
-                    <p
-                      className="inline-flex min-w-[2rem] justify-center rounded-lg bg-bg-soft px-2.5 py-1 text-[13px] font-semibold tabular-nums text-ink"
-                      title="Booking records for this guest"
-                    >
-                      {g.bookings}
+                    <div className="md:text-center">
+                      <p
+                        className="inline-flex min-w-[2rem] justify-center rounded-lg bg-bg-soft px-2.5 py-1 text-[13px] font-semibold tabular-nums text-ink"
+                        title="Booking records for this guest"
+                      >
+                        {g.bookings}
+                      </p>
+                    </div>
+
+                    <p className="min-w-0 truncate text-[13px] font-medium text-text">
+                      {hasBooked ? g.lastVenue : "—"}
                     </p>
-                  </div>
 
-                  <p className="min-w-0 truncate text-[13px] font-medium text-text">
-                    {hasBooked ? g.lastVenue : "—"}
-                  </p>
-
-                  <div className="md:flex md:justify-end">
-                    <Badge tone={hasBooked ? "success" : "neutral"}>
-                      {hasBooked ? "Has booked" : "Never booked"}
-                    </Badge>
-                  </div>
-                </ModuleFeedRow>
+                    <div className="md:flex md:justify-end">
+                      <Badge tone={hasBooked ? "success" : "neutral"}>
+                        {hasBooked ? "Has booked" : "Never booked"}
+                      </Badge>
+                    </div>
+                  </ModuleFeedRow>
+                </button>
               </li>
             );
           })}

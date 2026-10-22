@@ -187,7 +187,7 @@ export default function NewVenuePage() {
               Add venue
             </h1>
             <p className="mt-2.5 max-w-md text-[14px] text-text-muted">
-              Create a NYTO-organized venue, or open Host applications for
+              Create a NYTO-organized venue, or open Requests & Approvals for
               Venue-organized onboarding.
             </p>
           </div>
@@ -237,13 +237,13 @@ export default function NewVenuePage() {
               Onboarding a Venue-organized venue?
             </h2>
             <p className="max-w-lg text-[14px] leading-relaxed text-text-muted">
-              The venue applies through Host applications. After approval, they
+              The venue applies through Requests & Approvals. After approval, they
               manage and publish their own dining nights. Admin monitors synced
               inventory here and cannot create that venue from this form.
             </p>
             <div className="flex flex-wrap gap-3 pt-1">
               <Link href="/host-applications">
-                <Button>Open host applications</Button>
+                <Button>Open Requests & Approvals</Button>
               </Link>
               <Link href="/venues">
                 <Button variant="secondary">Back to venues</Button>

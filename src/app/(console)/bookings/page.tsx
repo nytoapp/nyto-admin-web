@@ -16,7 +16,7 @@ import {
   categoryLabel,
   type ExperienceCategory,
 } from "@/lib/categories";
-import { statusLabel } from "@/lib/format";
+import { paymentMethodLabel, statusLabel } from "@/lib/format";
 import type { HostedByFilter } from "@/lib/hosted-by";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
 import { bookingFeedKpis } from "@/lib/kpi";
@@ -67,12 +67,14 @@ function mockBookingRows(): BookingRow[] {
   return MOCK_BOOKINGS.map((b) => ({
     id: b.id,
     guest: b.guest,
+    userId: null,
     phone: b.phone,
     email: b.email ?? "—",
     venue: b.venue,
     venueId: b.venueId,
     area: b.area ?? "—",
     when: b.when,
+    startsAtIso: null,
     seats: b.seats,
     status: b.status,
     amount: b.amount ?? "—",
@@ -89,6 +91,12 @@ function mockBookingRows(): BookingRow[] {
     hostedBy: b.hostedBy,
     cancelReason: null,
     createdAt: null,
+    tableId: null,
+    experienceName: null,
+    menuId: null,
+    inclusions: [],
+    paymentType: null,
+    seatPrice: null,
   }));
 }
 
@@ -397,13 +405,14 @@ export default function BookingsPage() {
           className="overflow-hidden rounded-2xl border border-border bg-bg-elevated/50 shadow-[var(--shadow-sm)] nyto-rise"
           style={{ animationDelay: "100ms" }}
         >
-          <div className="hidden border-b border-border-subtle px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-faint lg:grid lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1.15fr)_72px_96px_100px_100px_28px] lg:gap-3">
+          <div className="hidden border-b border-border-subtle px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-faint lg:grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.1fr)_72px_88px_92px_100px_88px_28px] lg:gap-3">
             <span>Guest</span>
             <span>Night</span>
             <span className="text-right">Booked · cap</span>
             <span className="text-right">Amount</span>
             <span className="text-right">Booking</span>
             <span className="text-right">Payment</span>
+            <span className="text-right">Method</span>
             <span />
           </div>
           <ul>
@@ -499,7 +508,7 @@ function BookingRow({
     <button
       type="button"
       onClick={onOpen}
-      className="nyto-bookings-row group grid w-full grid-cols-1 gap-2.5 px-4 py-3.5 text-left hover:bg-bg-hover/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--ring)] sm:px-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1.15fr)_72px_96px_100px_100px_28px] lg:items-center lg:gap-3"
+      className="nyto-bookings-row group grid w-full grid-cols-1 gap-2.5 px-4 py-3.5 text-left hover:bg-bg-hover/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--ring)] sm:px-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.1fr)_72px_88px_92px_100px_88px_28px] lg:items-center lg:gap-3"
     >
       <div className="min-w-0">
         <div className="flex items-center gap-2.5">
@@ -528,7 +537,13 @@ function BookingRow({
           ) : null}
         </p>
         <p className="mt-0.5 truncate text-[12px] leading-tight text-text-faint">
-          {nightLine || "Night unavailable"}
+          {[
+            nightLine || null,
+            b.experienceName,
+            b.inclusions.length > 0 ? b.inclusions.slice(0, 2).join(", ") : null,
+          ]
+            .filter(Boolean)
+            .join(" · ") || "Night unavailable"}
         </p>
       </div>
 
@@ -573,6 +588,17 @@ function BookingRow({
           <span className="text-[12px] text-text-faint">—</span>
         )}
       </div>
+
+      <p
+        className="pl-[18px] text-[12px] leading-tight text-text-muted lg:pl-0 lg:text-right"
+        title="Payment method from linked payment record"
+      >
+        {b.paymentMethod
+          ? paymentMethodLabel(b.paymentMethod)
+          : b.paymentStatus
+            ? "Unknown"
+            : "—"}
+      </p>
 
       <span
         className="nyto-bookings-arrow hidden text-[16px] text-text-faint lg:block lg:text-right"

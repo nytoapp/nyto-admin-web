@@ -38,9 +38,23 @@ const STATUS_LABELS: Record<string, string> = {
   SINGLES: "Singles",
   UPI: "UPI",
   CARD: "Card",
+  UNKNOWN: "Unknown",
   STUB: "Stub",
   RAZORPAY: "Razorpay",
+  ALL_INCLUSIVE: "All-inclusive",
+  PAY_OWN_BILL: "Pay own bill",
+  DAYTIME: "Daytime",
+  EVENING: "Evening",
 };
+
+/** Payment method from API — never invent UPI/card when missing or UNKNOWN. */
+export function paymentMethodLabel(
+  method: string | null | undefined,
+): string {
+  const raw = (method ?? "").trim();
+  if (!raw || raw.toUpperCase() === "UNKNOWN") return "Not available";
+  return statusLabel(raw);
+}
 
 const TIMEZONE = "Asia/Kolkata";
 
