@@ -5,6 +5,7 @@ export type GuestJourneyStage =
   | "awaiting_attendance_record"
   | "attended"
   | "no_show"
+  | "cancelled"
   | "other";
 
 export type GuestJourneyBucket = {
@@ -13,6 +14,15 @@ export type GuestJourneyBucket = {
   hint: string;
   rows: BookingRow[];
 };
+
+/** Stages shown on the Guest Experience journey board. */
+export const GUEST_JOURNEY_BOARD_STAGES: GuestJourneyStage[] = [
+  "before_night",
+  "awaiting_attendance_record",
+  "attended",
+  "no_show",
+  "cancelled",
+];
 
 /**
  * Classify a booking into an operational journey stage using persisted
@@ -26,7 +36,7 @@ export function classifyGuestJourneyStage(
   const status = String(row.status ?? "").toUpperCase();
   if (status === "ATTENDED") return "attended";
   if (status === "NO_SHOW") return "no_show";
-  if (status === "CANCELLED") return "other";
+  if (status === "CANCELLED") return "cancelled";
 
   const startMs = row.startsAtIso
     ? new Date(row.startsAtIso).getTime()
@@ -54,6 +64,7 @@ export function buildGuestJourneyBuckets(
     awaiting_attendance_record: [],
     attended: [],
     no_show: [],
+    cancelled: [],
     other: [],
   };
 
@@ -71,6 +82,7 @@ export function buildGuestJourneyBuckets(
   buckets.awaiting_attendance_record.sort(sortByStart);
   buckets.attended.sort((a, b) => sortByStart(b, a));
   buckets.no_show.sort((a, b) => sortByStart(b, a));
+  buckets.cancelled.sort((a, b) => sortByStart(b, a));
 
   return [
     {
@@ -97,7 +109,28 @@ export function buildGuestJourneyBuckets(
       hint: "",
       rows: buckets.no_show,
     },
+    {
+      stage: "cancelled",
+      label: "Cancelled",
+      hint: "",
+      rows: buckets.cancelled,
+    },
   ];
+}
+
+/** Venues that appear on the journey board only (not every booking in the raw feed). */
+export function venuesFromJourneyBuckets(
+  buckets: GuestJourneyBucket[],
+): Array<[string, string]> {
+  const map = new Map<string, string>();
+  for (const bucket of buckets) {
+    for (const r of bucket.rows) {
+      if (r.venueId) {
+        map.set(r.venueId, r.venue !== "—" ? r.venue : r.venueId);
+      }
+    }
+  }
+  return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
 }
 
 /** Distinct guests in a booking list (falls back to booking id when userId missing). */

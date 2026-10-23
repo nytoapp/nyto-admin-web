@@ -420,16 +420,15 @@ export default function BookingDetailPage() {
             {attendanceDisplayLabel(booking.status)}
           </p>
           <p className="mt-1.5 text-[12px] leading-relaxed text-text-muted">
-            Booking status is not physical door check-in. Arrival confirmation
-            (TableMember.attended) is not on admin APIs. Related complaints,
-            follow-ups, and feedback are not available yet — see{" "}
+            Booking status is not physical door check-in. Guest complaints and
+            follow-ups for this night will appear in{" "}
             <Link
               href="/guest-experience"
               className="font-semibold text-accent hover:underline"
             >
               Guest Experience
-            </Link>
-            .
+            </Link>{" "}
+            once report APIs are connected.
           </p>
         </div>
       </section>

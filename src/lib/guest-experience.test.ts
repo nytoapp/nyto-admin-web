@@ -6,6 +6,7 @@ import {
   classifyGuestJourneyStage,
   GUEST_EXPERIENCE_API_GAPS,
   uniqueGuestCount,
+  venuesFromJourneyBuckets,
 } from "./guest-experience";
 
 function row(over: Partial<BookingRow> = {}): BookingRow {
@@ -84,6 +85,12 @@ describe("classifyGuestJourneyStage", () => {
     );
   });
 
+  it("puts cancelled bookings in cancelled, not a hidden other bucket", () => {
+    expect(classifyGuestJourneyStage(row({ status: "CANCELLED" }), NOW)).toBe(
+      "cancelled",
+    );
+  });
+
   it("handles missing guest/venue fields without throwing", () => {
     expect(
       classifyGuestJourneyStage(
@@ -132,6 +139,37 @@ describe("attendanceDisplayLabel", () => {
     expect(attendanceDisplayLabel("CONFIRMED")).toBe("Booking · Confirmed");
     expect(attendanceDisplayLabel("ATTENDED")).toBe("Booking · Attended");
     expect(attendanceDisplayLabel("NO_SHOW")).toBe("Booking · No-show");
+  });
+});
+
+describe("venuesFromJourneyBuckets", () => {
+  it("only lists venues that appear on the journey board", () => {
+    const buckets = buildGuestJourneyBuckets(
+      [
+        row({
+          id: "1",
+          status: "CANCELLED",
+          venueId: "v1",
+          venue: "Jubilee Supper Club",
+        }),
+        row({
+          id: "2",
+          status: "CONFIRMED",
+          startsAtIso: "2026-10-25T13:30:00.000Z",
+          venueId: "v2",
+          venue: "Hitech Terrace",
+        }),
+      ],
+      NOW,
+    );
+    const venues = venuesFromJourneyBuckets(buckets);
+    expect(venues.map(([id]) => id).sort()).toEqual(["v1", "v2"]);
+  });
+
+  it("returns no venues when the board is empty", () => {
+    expect(venuesFromJourneyBuckets(buildGuestJourneyBuckets([], NOW))).toEqual(
+      [],
+    );
   });
 });
 

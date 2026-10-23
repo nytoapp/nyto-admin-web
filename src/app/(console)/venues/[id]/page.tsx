@@ -320,15 +320,14 @@ export default function VenueDetailPage() {
       ) : null}
 
       <p className="mb-5 rounded-xl border border-border-subtle bg-bg/30 px-4 py-3 text-[12px] leading-relaxed text-text-faint">
-        Venue-related complaints are not on admin APIs yet. Guest journey staging
-        from the bookings feed is on{" "}
+        Venue-related guest complaints will appear in{" "}
         <Link
           href="/guest-experience"
           className="font-semibold text-accent hover:underline"
         >
           Guest Experience
-        </Link>
-        .
+        </Link>{" "}
+        once report APIs are connected.
       </p>
 
       <div className="mb-6 flex flex-wrap gap-1 rounded-xl border border-border bg-bg-elevated/80 p-1">

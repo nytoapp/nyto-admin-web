@@ -139,6 +139,55 @@ export function groupGuestBookings<
   return { upcoming, past, cancelled, unknown };
 }
 
+export type VisitHistoryGroups<T> = {
+  /** Future, still active. */
+  upcoming: T[];
+  /**
+   * Night already started (or passed) — includes cancelled / attended / no-show.
+   * This is the guest’s visit timeline, not a separate “dinners” list.
+   */
+  pastVisits: T[];
+  /** Cancelled before the night started. */
+  cancelledUpcoming: T[];
+  undated: T[];
+};
+
+/**
+ * Visit-centric grouping for Guest Details: one past timeline (when they were on).
+ * Cancelled past nights stay in pastVisits with status badges — not a second list.
+ */
+export function buildVisitHistoryGroups<
+  T extends Pick<BookingRow, "startsAtIso" | "status">,
+>(rows: T[], nowMs: number = Date.now()): VisitHistoryGroups<T> {
+  const upcoming: T[] = [];
+  const pastVisits: T[] = [];
+  const cancelledUpcoming: T[] = [];
+  const undated: T[] = [];
+
+  for (const row of rows) {
+    const timing = bookingTiming(row, nowMs);
+    const cancelled = isCancelledStatus(row.status);
+
+    if (timing === "past") {
+      pastVisits.push(row);
+      continue;
+    }
+    if (timing === "upcoming") {
+      if (cancelled) cancelledUpcoming.push(row);
+      else upcoming.push(row);
+      continue;
+    }
+    // Missing date
+    if (cancelled) cancelledUpcoming.push(row);
+    else undated.push(row);
+  }
+
+  upcoming.sort(byStartAsc);
+  pastVisits.sort((a, b) => byStartAsc(b, a));
+  cancelledUpcoming.sort((a, b) => byStartAsc(b, a));
+  return { upcoming, pastVisits, cancelledUpcoming, undated };
+}
+
 export function buildVenueVisitSummaries(
   rows: BookingRow[],
 ): VenueVisitSummary[] {

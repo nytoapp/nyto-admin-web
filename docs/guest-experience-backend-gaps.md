@@ -1,16 +1,26 @@
-# Guest Experience — backend gaps (developer note)
+# Guest Experience — purpose & backend gaps
 
-The Guest Experience admin dashboard uses the capped `/admin/bookings` feed for journey staging only. The following capabilities are **not** on admin APIs and must not be faked in the UI.
+## What this module is for
 
-Source of truth in code: `GUEST_EXPERIENCE_API_GAPS` in `src/lib/guest-experience.ts`.
+**Guest Experience** is the admin **support / issues inbox**:
+
+- Guest complaints and behaviour / venue / group reports from the NYTO app
+- Follow-up cases until resolution
+- Guest feedback after a night
+- Instant alerts when a new report is submitted
+
+It is **not** a second Bookings list. Reservations stay in **Bookings**; profiles and visit history stay in **Guests**.
+
+## What is not connected yet
+
+Source constant: `GUEST_EXPERIENCE_API_GAPS` in `src/lib/guest-experience.ts`.
 
 | Gap | Need |
 |-----|------|
 | Complaint / report records | Persisted reports with guest, booking, venue, category, description, priority, status, assignment |
 | Follow-up case records | Cases with due date, assignee, status workflow, action history |
 | Guest feedback | Feedback/rating entity on admin APIs |
-| Physical arrival confirmation | Expose `TableMember.attended` (or equivalent) on admin booking payloads |
-| Instant admin notifications | Persist on report create; authorized admin channel or inbox; recover missed events |
-| Reminder / confirmation send status | Admin-visible delivery ledger |
+| Instant admin notifications | Persist on report create; authorized admin channel or inbox |
+| Physical arrival (optional elsewhere) | Separate from this inbox — door check-in is not complaint data |
 
-Do not treat dashboard “Not connected” / unavailable labels as product defects for these items until the APIs exist.
+Until those APIs exist, the Guest Experience UI must show **Not connected** — never invent complaints or alerts.
