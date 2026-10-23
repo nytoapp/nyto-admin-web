@@ -22,13 +22,11 @@ import {
 import { categoryLabel } from "@/lib/categories";
 import { paymentMethodLabel, statusLabel } from "@/lib/format";
 import {
-  bookingTiming,
   buildVenueVisitSummaries,
+  buildVisitHistoryGroups,
   countByBookingStatus,
-  groupGuestBookings,
   loadSharedTableContexts,
   mealPeriodFromStartsAt,
-  mealPeriodLabel,
   physicalAttendanceLabel,
   reconnectPreferenceLabel,
   type SharedTableContext,
@@ -40,9 +38,8 @@ import { MOCK_GUESTS } from "@/lib/mock/data";
 import { useAuth } from "@/providers/auth-provider";
 
 /**
- * Guest history from existing list APIs only.
- * `/admin/guests` and `/admin/bookings` are both capped (take: 100).
- * There is no admin bookings-by-userId filter — feed history is not lifetime.
+ * Guest Details — visit history from capped bookings + guest list APIs.
+ * Physical arrival, reconnect preference, and lifetime ledger need backend work.
  */
 
 const CONTACT_FALLBACK = "Not provided";
@@ -52,7 +49,6 @@ type GuestIdentity = {
   name: string;
   phone: string;
   email: string;
-  /** Lifetime booking record count from `/admin/guests` `_count.bookings`. */
   guestListBookings: number | null;
   lastVenue: string | null;
 };
@@ -153,34 +149,33 @@ export default function GuestDetailPage() {
   const loading = !mockMode && guestLoading;
   const error = guestError || historyError || sharedError;
 
-  const { upcoming, past, cancelled, unknown } = useMemo(
-    () => groupGuestBookings(rows),
+  const { upcoming, pastVisits, cancelledUpcoming, undated } = useMemo(
+    () => buildVisitHistoryGroups(rows),
     [rows],
   );
   const statusCounts = useMemo(() => countByBookingStatus(rows), [rows]);
   const venueSummaries = useMemo(() => buildVenueVisitSummaries(rows), [rows]);
-  /** Past-dated experiences including cancelled — status badges stay distinct. */
-  const pastExperiences = useMemo(() => {
-    const dated = rows.filter((b) => bookingTiming(b) === "past");
-    return [...dated].sort((a, b) => {
-      const am = a.startsAtIso ? new Date(a.startsAtIso).getTime() : 0;
-      const bm = b.startsAtIso ? new Date(b.startsAtIso).getTime() : 0;
-      return bm - am;
-    });
-  }, [rows]);
+  const nightsCount = useMemo(
+    () => new Set(rows.map((r) => r.tableId).filter(Boolean)).size,
+    [rows],
+  );
+  const tablesWithPeers = useMemo(
+    () => (sharedTables ?? []).filter((t) => t.peers.length > 0),
+    [sharedTables],
+  );
 
   if (loading) {
     return (
       <div className="nyto-fade mx-auto max-w-4xl space-y-4">
         <Skeleton className="h-8 w-28" />
-        <Skeleton className="h-44 w-full rounded-[22px]" />
+        <Skeleton className="h-40 w-full rounded-[22px]" />
         <div className="grid gap-3 sm:grid-cols-4">
           <Skeleton className="h-20 rounded-xl" />
           <Skeleton className="h-20 rounded-xl" />
           <Skeleton className="h-20 rounded-xl" />
           <Skeleton className="h-20 rounded-xl" />
         </div>
-        <Skeleton className="h-64 w-full rounded-2xl" />
+        <Skeleton className="h-56 w-full rounded-2xl" />
       </div>
     );
   }
@@ -190,7 +185,7 @@ export default function GuestDetailPage() {
       <div className="nyto-fade mx-auto max-w-4xl">
         <PageHeader
           title="Guest not found"
-          description="This account is not in the loaded guest list (API returns up to 100 consumer accounts)."
+          description="This account is not in the loaded guest list."
           actions={
             <Button variant="secondary" onClick={() => router.push("/guests")}>
               Back to guests
@@ -253,16 +248,21 @@ export default function GuestDetailPage() {
             </div>
           </dl>
 
-          <p className="mt-5 max-w-2xl border-t border-border-subtle pt-4 text-[12px] text-text-faint">
-            History from the loaded bookings feed — not a lifetime ledger.
+          <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border-subtle pt-4 text-[12px] text-text-faint">
+            <span>
+              Reconnect ·{" "}
+              <span className="text-text-muted">
+                {reconnectPreferenceLabel()}
+              </span>
+            </span>
             {identity.lastVenue ? (
-              <>
-                {" "}
+              <span>
                 Last venue ·{" "}
                 <span className="text-text-muted">{identity.lastVenue}</span>
-              </>
+              </span>
             ) : null}
-          </p>
+            <span>Feed only · not lifetime</span>
+          </div>
         </div>
       </header>
 
@@ -281,8 +281,8 @@ export default function GuestDetailPage() {
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
-          label="In feed"
-          hint="Booking records"
+          label="Bookings in feed"
+          hint="Records shown below"
           value={historySettled ? String(rows.length) : "—"}
         />
         <Stat
@@ -295,9 +295,9 @@ export default function GuestDetailPage() {
           }
         />
         <Stat
-          label="Upcoming"
-          hint="In feed"
-          value={historySettled ? String(upcoming.length) : "—"}
+          label="Dining nights"
+          hint="Tables in feed"
+          value={historySettled ? String(nightsCount) : "—"}
         />
         <Stat
           label="Booking · Attended"
@@ -306,256 +306,71 @@ export default function GuestDetailPage() {
         />
       </div>
 
-      {/* Booking history */}
-      <section className="mt-5 overflow-hidden rounded-2xl border border-border bg-bg-elevated/70 shadow-[var(--shadow-sm)]">
-        <div className="border-b border-border-subtle px-5 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-faint">
-            Booking history
-          </p>
-        </div>
-
+      {/* Primary: visit timeline */}
+      <SectionCard title="Visit history">
         {!historySettled ? (
-          <div className="space-y-0 p-0">
+          <div>
             <Skeleton className="h-[72px] rounded-none" />
             <Skeleton className="h-[72px] rounded-none opacity-70" />
           </div>
         ) : rows.length === 0 ? (
           <EmptyState
-            title="No bookings found"
-            description="No bookings for this guest in the current feed."
+            title="No visits in feed"
+            description="No bookings for this guest in the current bookings feed."
           />
         ) : (
           <div>
             {upcoming.length > 0 ? (
-              <BookingGroup label="Upcoming" rows={upcoming} />
+              <VisitGroup label="Upcoming" rows={upcoming} />
             ) : null}
-            {past.length > 0 ? (
-              <BookingGroup label="Past" rows={past} />
+            {pastVisits.length > 0 ? (
+              <VisitGroup label="Past visits" rows={pastVisits} />
             ) : null}
-            {cancelled.length > 0 ? (
-              <BookingGroup label="Cancelled" rows={cancelled} />
+            {cancelledUpcoming.length > 0 ? (
+              <VisitGroup
+                label="Cancelled before night"
+                rows={cancelledUpcoming}
+              />
             ) : null}
-            {unknown.length > 0 ? (
-              <BookingGroup label="Date unknown" rows={unknown} />
+            {undated.length > 0 ? (
+              <VisitGroup label="Date unknown" rows={undated} />
             ) : null}
           </div>
         )}
-      </section>
+      </SectionCard>
 
-      {/* Venue visit history */}
-      <SectionCard title="Venue visit history">
-        {!historySettled ? (
-          <Skeleton className="mx-5 mb-4 h-16 rounded-xl" />
-        ) : venueSummaries.length === 0 ? (
-          <EmptyState
-            title="No venue records found"
-            description="No venue bookings in the current feed."
-          />
-        ) : (
+      {/* Venue rollup — compact, not a second history */}
+      {historySettled && venueSummaries.length > 0 ? (
+        <SectionCard title="By venue">
           <ul>
             {venueSummaries.map((v) => (
               <VenueRow key={v.venueId} summary={v} />
             ))}
           </ul>
-        )}
-      </SectionCard>
+        </SectionCard>
+      ) : null}
 
-      {/* Tables & attendance */}
-      <SectionCard title="Dining nights & attendance">
-        {!historySettled ? (
-          <Skeleton className="mx-5 mb-4 h-16 rounded-xl" />
-        ) : rows.filter((r) => r.tableId).length === 0 ? (
-          <EmptyState
-            title="No dining nights found"
-            description="No dining-night links on this guest’s bookings."
-          />
-        ) : (
-          <ul>
-            {rows
-              .filter((r) => r.tableId)
-              .map((r) => (
-                <li
-                  key={r.id}
-                  className="flex flex-col gap-1.5 border-b border-border-subtle px-5 py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-[14px] font-semibold text-ink">
-                      {experienceDisplayName(r.experienceName)}
-                    </p>
-                    <p className="mt-0.5 text-[12px] text-text-muted">
-                      {[
-                        r.venue !== "—" ? r.venue : null,
-                        r.when !== "—" ? r.when : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <Badge tone={statusTone(r.status)}>
-                      Booking · {statusLabel(r.status)}
-                    </Badge>
-                    <Badge tone="neutral">
-                      {physicalAttendanceLabel()}
-                    </Badge>
-                    <Link
-                      href={`/bookings/${r.id}`}
-                      className="text-[12px] font-semibold text-accent hover:underline"
-                    >
-                      Booking
-                    </Link>
-                  </div>
-                </li>
-              ))}
-          </ul>
-        )}
-      </SectionCard>
-
-      {/* Past dinners & lunches */}
-      <SectionCard title="Past dinners & lunches">
-        {!historySettled ? (
-          <Skeleton className="mx-5 mb-4 h-16 rounded-xl" />
-        ) : pastExperiences.length === 0 ? (
-          <EmptyState
-            title="No past experiences found"
-            description="No past-dated bookings in the current feed."
-          />
-        ) : (
-          <ul>
-            {pastExperiences.map((r) => {
-              const period = mealPeriodFromStartsAt(r.startsAtIso);
-              return (
-                <li
-                  key={r.id}
-                  className="flex flex-col gap-1.5 border-b border-border-subtle px-5 py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-[14px] font-semibold text-ink">
-                      {experienceDisplayName(r.experienceName)}
-                    </p>
-                    <p className="mt-0.5 text-[12px] text-text-muted">
-                      {[
-                        mealPeriodLabel(period),
-                        r.venue !== "—" ? r.venue : null,
-                        r.when !== "—" ? r.when : null,
-                        r.tableType ? categoryLabel(r.tableType) : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <Badge tone={statusTone(r.status)}>
-                      Booking · {statusLabel(r.status)}
-                    </Badge>
-                    {r.paymentStatus ? (
-                      <Badge tone={statusTone(r.paymentStatus)}>
-                        Payment · {statusLabel(r.paymentStatus)}
-                      </Badge>
-                    ) : null}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </SectionCard>
-
-      {/* People at same tables */}
+      {/* Table mates — only when we have peers */}
       <SectionCard title="People at the same table">
         {mockMode ? (
           <p className="px-5 py-4 text-[13px] text-text-faint">Not available</p>
         ) : !historySettled || (sharedLoading && !sharedTables) ? (
-          <Skeleton className="mx-5 mb-4 h-16 rounded-xl" />
+          <Skeleton className="mx-5 my-4 h-14 rounded-xl" />
         ) : !tableKey ? (
-          <EmptyState
-            title="No table bookings found"
-            description="No dining-night links available for this guest."
-          />
-        ) : (sharedTables ?? []).length === 0 ? (
-          <EmptyState
-            title="No shared-table data"
-            description="Could not load bookings for these dining nights."
-          />
+          <p className="px-5 py-4 text-[13px] text-text-faint">
+            No dining-night links on these bookings.
+          </p>
+        ) : tablesWithPeers.length === 0 ? (
+          <p className="px-5 py-4 text-[13px] text-text-faint">
+            No other guests found on the same table.
+          </p>
         ) : (
           <ul>
-            {(sharedTables as SharedTableContext[]).map((t) => (
-              <li
-                key={t.tableId}
-                className="border-b border-border-subtle px-5 py-3 last:border-0"
-              >
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-[14px] font-semibold text-ink">
-                      {experienceDisplayName(t.experienceName)}
-                    </p>
-                    <p className="mt-0.5 text-[12px] text-text-muted">
-                      {[
-                        t.venue !== "—" ? t.venue : null,
-                        t.when !== "—" ? t.when : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-                  </div>
-                  <Badge tone={statusTone(t.guestBookingStatus)}>
-                    Booking · {statusLabel(t.guestBookingStatus)}
-                  </Badge>
-                </div>
-                {t.peers.length === 0 ? (
-                  <p className="mt-2 text-[12px] text-text-faint">
-                    No other bookings found for this table
-                  </p>
-                ) : (
-                  <ul className="mt-2 space-y-1.5">
-                    {t.peers.map((p) => (
-                      <li
-                        key={p.bookingId}
-                        className="flex flex-wrap items-center justify-between gap-2 text-[13px]"
-                      >
-                        <span className="min-w-0 truncate font-medium text-ink">
-                          {p.userId ? (
-                            <Link
-                              href={`/guests/${p.userId}`}
-                              className="hover:text-accent hover:underline"
-                            >
-                              {p.guest}
-                            </Link>
-                          ) : (
-                            p.guest
-                          )}
-                          <span className="ml-2 text-[11px] font-normal text-text-faint">
-                            {p.seats} seat{p.seats === 1 ? "" : "s"}
-                          </span>
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <Badge tone={statusTone(p.bookingStatus)}>
-                            Booking · {statusLabel(p.bookingStatus)}
-                          </Badge>
-                          <Link
-                            href={`/bookings/${p.bookingId}`}
-                            className="text-[12px] font-semibold text-accent hover:underline"
-                          >
-                            Open
-                          </Link>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </li>
+            {tablesWithPeers.map((t) => (
+              <SharedTableBlock key={t.tableId} table={t} />
             ))}
           </ul>
         )}
-      </SectionCard>
-
-      {/* Reconnect */}
-      <SectionCard title="Reconnect preference">
-        <div className="px-5 py-3.5">
-          <p className="text-[14px] font-medium text-ink">
-            {reconnectPreferenceLabel()}
-          </p>
-        </div>
       </SectionCard>
 
       <p className="mt-5 text-[12px]">
@@ -570,7 +385,7 @@ export default function GuestDetailPage() {
   );
 }
 
-function BookingGroup({
+function VisitGroup({
   label,
   rows,
 }: {
@@ -582,15 +397,13 @@ function BookingGroup({
       <div className="border-b border-border-subtle bg-bg/30 px-5 py-2">
         <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-faint">
           {label}
-          <span className="ml-2 tabular-nums text-text-muted">
-            {rows.length}
-          </span>
+          <span className="ml-2 tabular-nums text-text-muted">{rows.length}</span>
         </p>
       </div>
       <ul>
         {rows.map((b) => (
           <li key={b.id} className="border-b border-border-subtle last:border-0">
-            <HistoryRow booking={b} />
+            <VisitRow booking={b} />
           </li>
         ))}
       </ul>
@@ -598,12 +411,11 @@ function BookingGroup({
   );
 }
 
-function HistoryRow({ booking: b }: { booking: EnrichedBookingRow }) {
+function VisitRow({ booking: b }: { booking: EnrichedBookingRow }) {
   const router = useRouter();
-  const experienceLine = experienceDisplayName(b.experienceName);
-  const inclusionLine =
-    b.inclusions.length > 0 ? b.inclusions.join(" · ") : null;
   const meal = mealPeriodFromStartsAt(b.startsAtIso);
+  const mealTag =
+    meal === "lunch" ? "Lunch" : meal === "dinner" ? "Dinner" : null;
 
   function openBooking() {
     router.push(`/bookings/${b.id}`);
@@ -622,51 +434,48 @@ function HistoryRow({ booking: b }: { booking: EnrichedBookingRow }) {
       tabIndex={0}
       onClick={openBooking}
       onKeyDown={onKeyActivate}
-      className="flex cursor-pointer flex-col gap-2 px-5 py-3 hover:bg-bg-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--ring)] sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+      className="flex cursor-pointer flex-col gap-2 px-5 py-3.5 hover:bg-bg-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--ring)] sm:flex-row sm:items-center sm:justify-between sm:gap-4"
     >
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="truncate text-[15px] font-semibold tracking-[-0.02em] text-ink">
-            {b.venue !== "—" ? b.venue : "Venue unavailable"}
+          <p className="text-[15px] font-semibold tracking-[-0.02em] text-ink">
+            {b.when && b.when !== "—" ? b.when : "Date unknown"}
           </p>
-          <HostedByBadge value={b.hostedBy} short />
-          {b.venueId ? (
-            <Link
-              href={`/venues/${b.venueId}`}
-              className="text-[12px] font-semibold text-accent hover:underline"
-              onClick={(e) => e.stopPropagation()}
-            >
-              Venue
-            </Link>
+          {mealTag ? (
+            <span className="rounded-md border border-border-subtle bg-bg/50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+              {mealTag}
+            </span>
           ) : null}
+          <HostedByBadge value={b.hostedBy} short />
         </div>
+
+        <p className="mt-1 truncate text-[14px] font-medium text-ink">
+          {b.venue !== "—" ? b.venue : "Venue unavailable"}
+          {b.venueId ? (
+            <>
+              {" · "}
+              <Link
+                href={`/venues/${b.venueId}`}
+                className="font-semibold text-accent hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Venue
+              </Link>
+            </>
+          ) : null}
+        </p>
 
         <p className="mt-0.5 text-[13px] text-text-muted">
           {[
-            b.when && b.when !== "—" ? b.when : null,
-            meal ? mealPeriodLabel(meal) : null,
+            experienceDisplayName(b.experienceName),
             b.tableType ? categoryLabel(b.tableType) : null,
             b.seats != null
               ? `${b.seats} seat${b.seats === 1 ? "" : "s"}`
               : null,
           ]
             .filter(Boolean)
-            .join(" · ") || "Night details unavailable"}
+            .join(" · ")}
         </p>
-
-        <p className="mt-1 text-[13px] font-medium text-text">{experienceLine}</p>
-
-        {b.menuDescription ? (
-          <p className="mt-0.5 line-clamp-1 text-[12px] text-text-faint">
-            {b.menuDescription}
-          </p>
-        ) : null}
-
-        {inclusionLine ? (
-          <p className="mt-0.5 line-clamp-1 text-[12px] text-text-faint">
-            Includes · {inclusionLine}
-          </p>
-        ) : null}
       </div>
 
       <div className="flex shrink-0 flex-col items-start gap-1.5 sm:items-end">
@@ -678,11 +487,12 @@ function HistoryRow({ booking: b }: { booking: EnrichedBookingRow }) {
             <Badge tone={statusTone(b.paymentStatus)}>
               Payment · {statusLabel(b.paymentStatus)}
             </Badge>
-          ) : (
-            <span className="text-[11px] text-text-faint">No payment record</span>
-          )}
+          ) : null}
         </div>
-        <p className="text-[14px] font-semibold tabular-nums tracking-[-0.02em] text-ink">
+        <p className="text-[11px] text-text-faint">
+          Arrival · {physicalAttendanceLabel()}
+        </p>
+        <p className="text-[14px] font-semibold tabular-nums text-ink">
           {b.amount}
         </p>
         {b.paymentMethod ? (
@@ -712,20 +522,72 @@ function VenueRow({ summary: v }: { summary: VenueVisitSummary }) {
           </p>
         )}
         <p className="mt-0.5 text-[12px] tabular-nums text-text-muted">
-          {v.bookingRecords} booking record
-          {v.bookingRecords === 1 ? "" : "s"}
+          {v.bookingRecords} booking
+          {v.bookingRecords === 1 ? "" : "s"} in feed
         </p>
       </div>
-      <div className="flex flex-wrap gap-1.5 text-[11px]">
-        <Badge tone="neutral">
-          Booking · Attended {v.bookingAttended}
-        </Badge>
+      <div className="flex flex-wrap gap-1.5">
+        <Badge tone="neutral">Attended {v.bookingAttended}</Badge>
         <Badge tone="neutral">Cancelled {v.cancelled}</Badge>
         <Badge tone="neutral">No-show {v.noShow}</Badge>
-        {v.other > 0 ? (
-          <Badge tone="neutral">Other {v.other}</Badge>
-        ) : null}
       </div>
+    </li>
+  );
+}
+
+function SharedTableBlock({ table: t }: { table: SharedTableContext }) {
+  return (
+    <li className="border-b border-border-subtle px-5 py-3 last:border-0">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[14px] font-semibold text-ink">
+            {t.when !== "—" ? t.when : experienceDisplayName(t.experienceName)}
+          </p>
+          <p className="mt-0.5 text-[12px] text-text-muted">
+            {[
+              t.venue !== "—" ? t.venue : null,
+              experienceDisplayName(t.experienceName),
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        </div>
+        <Badge tone={statusTone(t.guestBookingStatus)}>
+          Booking · {statusLabel(t.guestBookingStatus)}
+        </Badge>
+      </div>
+      <ul className="mt-2 space-y-1.5">
+        {t.peers.map((p) => (
+          <li
+            key={p.bookingId}
+            className="flex flex-wrap items-center justify-between gap-2 text-[13px]"
+          >
+            <span className="min-w-0 truncate font-medium text-ink">
+              {p.userId ? (
+                <Link
+                  href={`/guests/${p.userId}`}
+                  className="hover:text-accent hover:underline"
+                >
+                  {p.guest}
+                </Link>
+              ) : (
+                p.guest
+              )}
+            </span>
+            <div className="flex items-center gap-2">
+              <Badge tone={statusTone(p.bookingStatus)}>
+                Booking · {statusLabel(p.bookingStatus)}
+              </Badge>
+              <Link
+                href={`/bookings/${p.bookingId}`}
+                className="text-[12px] font-semibold text-accent hover:underline"
+              >
+                Open
+              </Link>
+            </div>
+          </li>
+        ))}
+      </ul>
     </li>
   );
 }

@@ -3,6 +3,7 @@ import type { BookingRow } from "./mappers";
 import {
   bookingTiming,
   buildVenueVisitSummaries,
+  buildVisitHistoryGroups,
   countByBookingStatus,
   groupGuestBookings,
   mealPeriodFromStartsAt,
@@ -50,6 +51,52 @@ function row(over: Partial<BookingRow> = {}): BookingRow {
 }
 
 const NOW = Date.parse("2026-10-20T12:00:00.000Z");
+
+describe("buildVisitHistoryGroups", () => {
+  it("puts past cancelled bookings in past visits, not a separate dinners list", () => {
+    const { pastVisits, upcoming, cancelledUpcoming } = buildVisitHistoryGroups(
+      [
+        row({
+          id: "past-cancelled",
+          status: "CANCELLED",
+          startsAtIso: "2026-10-10T13:30:00.000Z",
+        }),
+        row({
+          id: "past-attended",
+          status: "ATTENDED",
+          startsAtIso: "2026-10-08T13:30:00.000Z",
+        }),
+      ],
+      NOW,
+    );
+    expect(pastVisits.map((r) => r.id)).toEqual([
+      "past-cancelled",
+      "past-attended",
+    ]);
+    expect(upcoming).toHaveLength(0);
+    expect(cancelledUpcoming).toHaveLength(0);
+  });
+
+  it("keeps future cancelled out of upcoming", () => {
+    const { upcoming, cancelledUpcoming } = buildVisitHistoryGroups(
+      [
+        row({
+          id: "future-cancelled",
+          status: "CANCELLED",
+          startsAtIso: "2026-10-25T13:30:00.000Z",
+        }),
+        row({
+          id: "future-ok",
+          status: "CONFIRMED",
+          startsAtIso: "2026-10-26T13:30:00.000Z",
+        }),
+      ],
+      NOW,
+    );
+    expect(upcoming.map((r) => r.id)).toEqual(["future-ok"]);
+    expect(cancelledUpcoming.map((r) => r.id)).toEqual(["future-cancelled"]);
+  });
+});
 
 describe("groupGuestBookings", () => {
   it("puts future confirmed bookings in upcoming", () => {
