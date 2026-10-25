@@ -21,7 +21,12 @@ import {
 import { listPayments, refundPayment } from "@/lib/api/bookings";
 import { ApiError } from "@/lib/api/client";
 import { confirmDestructive } from "@/lib/console-settings";
-import { formatMoneyInr, paymentMethodLabel, statusLabel } from "@/lib/format";
+import {
+  billTypeLabel,
+  formatMoneyInr,
+  paymentMethodLabel,
+  statusLabel,
+} from "@/lib/format";
 import type { HostedByFilter } from "@/lib/hosted-by";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
 import { mapPaymentRow, type PaymentRow } from "@/lib/mappers";
@@ -29,6 +34,7 @@ import { MOCK_PAYMENTS } from "@/lib/mock/data";
 import {
   collectPaymentMethodFilterOptions,
   filterPaymentRows,
+  type BillTypeFilter,
   type PaymentMethodFilter,
 } from "@/lib/payment-method";
 import { useAuth } from "@/providers/auth-provider";
@@ -56,6 +62,7 @@ export default function PaymentsPage() {
   );
   const [hostedBy, setHostedBy] = useState<HostedByFilter>("all");
   const [method, setMethod] = useState<PaymentMethodFilter>("all");
+  const [billType, setBillType] = useState<BillTypeFilter>("all");
 
   useEffect(() => {
     setStatus(parsePaymentStatus(searchParams.get("status")));
@@ -87,6 +94,7 @@ export default function PaymentsPage() {
         providerRef: null,
         bookingId: null,
         hostedBy: p.hostedBy,
+        paymentType: p.paymentType ?? null,
       }));
     }
     return data ?? [];
@@ -104,9 +112,24 @@ export default function PaymentsPage() {
         status,
         hostedBy,
         method,
+        billType,
       }),
-    [q, status, hostedBy, method, source],
+    [q, status, hostedBy, method, billType, source],
   );
+
+  const billTypeCounts = useMemo(() => {
+    const counts = {
+      all: source.length,
+      ALL_INCLUSIVE: 0,
+      PAY_OWN_BILL: 0,
+    };
+    for (const p of source) {
+      const t = String(p.paymentType ?? "").toUpperCase();
+      if (t === "ALL_INCLUSIVE") counts.ALL_INCLUSIVE += 1;
+      if (t === "PAY_OWN_BILL") counts.PAY_OWN_BILL += 1;
+    }
+    return counts;
+  }, [source]);
 
   const capturedTotal = source
     .filter((p) => p.status === "CAPTURED")
@@ -166,7 +189,7 @@ export default function PaymentsPage() {
       <ModuleHero
         eyebrow="Operations"
         title="Payments"
-        description="Payments in current feed · amounts in INR by payment status."
+        description="Online checkout ledger · All-inclusive and Pay as you go nights · amounts in INR."
         stats={[
           {
             label: "Successfully captured",
@@ -285,6 +308,24 @@ export default function PaymentsPage() {
         <div className="mt-3 flex flex-wrap gap-1 border-t border-border-subtle pt-3">
           {(
             [
+              ["all", "All bill types"],
+              ["ALL_INCLUSIVE", "All-inclusive"],
+              ["PAY_OWN_BILL", "Pay as you go"],
+            ] as const
+          ).map(([id, label]) => (
+            <ModulePill
+              key={id}
+              active={billType === id}
+              onClick={() => setBillType(id)}
+              label={label}
+              count={billTypeCounts[id] ?? 0}
+            />
+          ))}
+        </div>
+
+        <div className="mt-2 flex flex-wrap gap-1">
+          {(
+            [
               ["all", "All"],
               ["CAPTURED", "Captured"],
               ["PENDING", "Pending"],
@@ -314,16 +355,17 @@ export default function PaymentsPage() {
           description={
             source.length === 0
               ? "Payments appear when a guest starts or completes checkout."
-              : "Try another search, status, or method filter."
+              : "Try another search, bill type, status, or method filter."
           }
         />
       ) : (
         <ModuleFeed
           headers={
-            <div className="hidden border-b border-border-subtle px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-faint lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.95fr)_88px_100px_100px_28px] lg:gap-3">
+            <div className="hidden border-b border-border-subtle px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-faint lg:grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_88px_110px_88px_100px_28px] lg:gap-3">
               <span>Guest</span>
               <span>Venue</span>
               <span className="text-right">Amount</span>
+              <span className="text-right">Bill type</span>
               <span className="text-right">Method</span>
               <span className="text-right">State</span>
               <span />
@@ -336,7 +378,7 @@ export default function PaymentsPage() {
               className="nyto-step-in border-b border-border-subtle last:border-0"
               style={{ animationDelay: `${120 + Math.min(i, 10) * 40}ms` }}
             >
-              <ModuleFeedRow className="lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.95fr)_88px_100px_100px_28px] lg:items-center lg:gap-3">
+              <ModuleFeedRow className="lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_88px_110px_88px_100px_28px] lg:items-center lg:gap-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="truncate text-[15px] font-semibold tracking-[-0.02em] text-ink">
@@ -372,6 +414,21 @@ export default function PaymentsPage() {
                 <p className="text-[14px] font-semibold tabular-nums text-ink lg:text-right">
                   {p.amount}
                 </p>
+                <div className="lg:flex lg:justify-end">
+                  {p.paymentType ? (
+                    <Badge
+                      tone={
+                        p.paymentType.toUpperCase() === "PAY_OWN_BILL"
+                          ? "warning"
+                          : "accent"
+                      }
+                    >
+                      {billTypeLabel(p.paymentType)}
+                    </Badge>
+                  ) : (
+                    <span className="text-[12px] text-text-faint">—</span>
+                  )}
+                </div>
                 <p className="text-[12px] text-text-muted lg:text-right">
                   {paymentMethodLabel(p.method)}
                 </p>

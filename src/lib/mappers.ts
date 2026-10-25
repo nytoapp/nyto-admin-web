@@ -65,6 +65,8 @@ export type PaymentRow = {
   providerRef: string | null;
   bookingId: string | null;
   hostedBy: HostedBy;
+  /** Night bill model from the booked table. */
+  paymentType: string | null;
 };
 
 export type SessionRow = {
@@ -184,6 +186,7 @@ export function mapPaymentRow(p: AdminPayment): PaymentRow {
     hostedBy: resolveHostedBy(
       p.booking?.table?.hostedBy ?? p.booking?.table?.venue?.hostedBy,
     ),
+    paymentType: p.booking?.table?.paymentType ?? null,
   };
 }
 

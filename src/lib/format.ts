@@ -42,7 +42,8 @@ const STATUS_LABELS: Record<string, string> = {
   STUB: "Stub",
   RAZORPAY: "Razorpay",
   ALL_INCLUSIVE: "All-inclusive",
-  PAY_OWN_BILL: "Pay own bill",
+  /** Guest-facing / ops label for PAY_OWN_BILL nights. */
+  PAY_OWN_BILL: "Pay as you go",
   DAYTIME: "Daytime",
   EVENING: "Evening",
 };
@@ -52,8 +53,16 @@ export function paymentMethodLabel(
   method: string | null | undefined,
 ): string {
   const raw = (method ?? "").trim();
-  if (!raw || raw.toUpperCase() === "UNKNOWN") return "Not available";
+  if (!raw || raw.toUpperCase() === "UNKNOWN") return "—";
   return statusLabel(raw);
+}
+
+/** Night bill model: All-inclusive vs Pay as you go (PAY_OWN_BILL). */
+export function billTypeLabel(
+  paymentType: string | null | undefined,
+): string | null {
+  if (!paymentType?.trim()) return null;
+  return statusLabel(paymentType);
 }
 
 const TIMEZONE = "Asia/Kolkata";

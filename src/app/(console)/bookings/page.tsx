@@ -500,7 +500,11 @@ function BookingRow({
   onOpen: () => void;
 }) {
   const contact = b.phone !== "—" ? b.phone : b.email !== "—" ? b.email : null;
-  const nightLine = [b.when, b.tableType ? categoryLabel(b.tableType) : null]
+  const nightLine = [
+    b.when,
+    b.tableType ? categoryLabel(b.tableType) : null,
+    b.paymentType ? statusLabel(b.paymentType) : null,
+  ]
     .filter(Boolean)
     .join(" · ");
 

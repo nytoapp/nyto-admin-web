@@ -563,49 +563,42 @@ export default function BookingDetailPage() {
         </div>
       </section>
 
-      {/* Co-bookings on the same table — not proof of interaction */}
-      {!mockMode && booking.tableId ? (
+      {/* Other guests who also booked seats at this table — only when someone else exists */}
+      {!mockMode &&
+      booking.tableId &&
+      tablePeers &&
+      tablePeers.length > 0 ? (
         <section className="mt-4 overflow-hidden rounded-2xl border border-border bg-bg-elevated/70 shadow-[var(--shadow-sm)]">
           <div className="p-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-faint">
-              Shared table
+              Same table
             </p>
             <p className="mt-1 text-[13px] text-text-muted">
-              Other bookings returned for this table. Same table ≠ verified
-              attendance together, and does not imply interaction or friendship.
+              Other guests who also booked seats at this table for this night.
             </p>
-            {!tablePeers ? (
-              <p className="mt-3 text-[13px] text-text-faint">Loading…</p>
-            ) : tablePeers.length === 0 ? (
-              <p className="mt-3 text-[13px] text-text-faint">
-                No other bookings were returned for this table. That does not
-                mean this guest dined alone.
-              </p>
-            ) : (
-              <ul className="mt-3 divide-y divide-border-subtle">
-                {tablePeers.map((peer) => (
-                  <li
-                    key={peer.id}
-                    className="flex items-center justify-between gap-3 py-2.5"
-                  >
-                    <div className="min-w-0">
-                      <Link
-                        href={`/bookings/${peer.id}`}
-                        className="truncate text-[14px] font-semibold text-ink hover:text-accent"
-                      >
-                        {peer.guest}
-                      </Link>
-                      <p className="text-[12px] text-text-faint">
-                        {peer.seats} seat{peer.seats === 1 ? "" : "s"}
-                      </p>
-                    </div>
-                    <Badge tone={statusTone(peer.status)}>
-                      {statusLabel(peer.status)}
-                    </Badge>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <ul className="mt-3 divide-y divide-border-subtle">
+              {tablePeers.map((peer) => (
+                <li
+                  key={peer.id}
+                  className="flex items-center justify-between gap-3 py-2.5"
+                >
+                  <div className="min-w-0">
+                    <Link
+                      href={`/bookings/${peer.id}`}
+                      className="truncate text-[14px] font-semibold text-ink hover:text-accent"
+                    >
+                      {peer.guest}
+                    </Link>
+                    <p className="text-[12px] text-text-faint">
+                      {peer.seats} seat{peer.seats === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <Badge tone={statusTone(peer.status)}>
+                    {statusLabel(peer.status)}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
       ) : null}

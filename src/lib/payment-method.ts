@@ -21,30 +21,24 @@ export function paymentMethodFilterKey(
 
 export function paymentMethodFilterLabel(key: string): string {
   if (key === "all") return "All methods";
-  if (key === PAYMENT_METHOD_UNAVAILABLE) return "Not available";
+  if (key === PAYMENT_METHOD_UNAVAILABLE) return "—";
   return paymentMethodLabel(key);
 }
 
-/** Options present in the loaded payment rows only — never invent methods. */
+/**
+ * Backend PaymentMethod enum is UPI | CARD | UNKNOWN.
+ * Filter always offers UPI and Card only — missing/UNKNOWN methods are not a filter option.
+ */
+export const PAYMENT_METHOD_FILTER_CORE = ["UPI", "CARD"] as const;
+
 export function collectPaymentMethodFilterOptions(
-  rows: Array<{ method: string | null | undefined }>,
+  rows: Array<{ method: string | null | undefined }> = [],
 ): { value: string; label: string }[] {
-  const keys = new Set<string>();
-  for (const row of rows) {
-    keys.add(paymentMethodFilterKey(row.method));
-  }
-  return [...keys]
-    .sort((a, b) => {
-      if (a === PAYMENT_METHOD_UNAVAILABLE) return 1;
-      if (b === PAYMENT_METHOD_UNAVAILABLE) return -1;
-      return paymentMethodFilterLabel(a).localeCompare(
-        paymentMethodFilterLabel(b),
-      );
-    })
-    .map((value) => ({
-      value,
-      label: paymentMethodFilterLabel(value),
-    }));
+  void rows;
+  return PAYMENT_METHOD_FILTER_CORE.map((value) => ({
+    value,
+    label: paymentMethodFilterLabel(value),
+  }));
 }
 
 export function paymentMatchesMethodFilter(
@@ -55,6 +49,8 @@ export function paymentMatchesMethodFilter(
   return paymentMethodFilterKey(method) === filter;
 }
 
+export type BillTypeFilter = "all" | "ALL_INCLUSIVE" | "PAY_OWN_BILL";
+
 export type PaymentListFilterable = {
   guest: string;
   venue: string;
@@ -64,6 +60,7 @@ export type PaymentListFilterable = {
   method: string | null;
   status: string;
   hostedBy: string;
+  paymentType?: string | null;
 };
 
 export function filterPaymentRows<T extends PaymentListFilterable>(
@@ -73,19 +70,35 @@ export function filterPaymentRows<T extends PaymentListFilterable>(
     status?: string;
     hostedBy?: string;
     method?: PaymentMethodFilter;
+    billType?: BillTypeFilter;
   },
 ): T[] {
   const needle = (opts.q ?? "").trim().toLowerCase();
   const status = opts.status ?? "all";
   const hostedBy = opts.hostedBy ?? "all";
   const method = opts.method ?? "all";
+  const billType = opts.billType ?? "all";
 
   return rows.filter((p) => {
     if (status !== "all" && p.status !== status) return false;
     if (hostedBy !== "all" && p.hostedBy !== hostedBy) return false;
     if (!paymentMatchesMethodFilter(p.method, method)) return false;
+    if (
+      billType !== "all" &&
+      String(p.paymentType ?? "").toUpperCase() !== billType
+    ) {
+      return false;
+    }
     if (!needle) return true;
-    return [p.guest, p.venue, p.amount, p.when, p.providerRef, p.method]
+    return [
+      p.guest,
+      p.venue,
+      p.amount,
+      p.when,
+      p.providerRef,
+      p.method,
+      p.paymentType,
+    ]
       .join(" ")
       .toLowerCase()
       .includes(needle);
