@@ -39,10 +39,10 @@ describe("paymentMethodLabel", () => {
     expect(paymentMethodLabel("CARD")).toBe("Card");
   });
 
-  it("shows Not available when method is missing or UNKNOWN", () => {
-    expect(paymentMethodLabel(null)).toBe("Not available");
-    expect(paymentMethodLabel("")).toBe("Not available");
-    expect(paymentMethodLabel("UNKNOWN")).toBe("Not available");
+  it("shows a dash when method is missing or UNKNOWN", () => {
+    expect(paymentMethodLabel(null)).toBe("—");
+    expect(paymentMethodLabel("")).toBe("—");
+    expect(paymentMethodLabel("UNKNOWN")).toBe("—");
   });
 });
 
@@ -92,19 +92,13 @@ describe("payment method filter", () => {
     expect(paymentMatchesMethodFilter("CARD", "all")).toBe(true);
   });
 
-  it("only lists method options present in loaded data", () => {
+  it("always lists UPI and Card only — no Not available option", () => {
     const options = collectPaymentMethodFilterOptions([
       pay({ method: "UPI" }),
       pay({ method: null }),
-      pay({ method: "UPI" }),
     ]);
-    expect(options.map((o) => o.value)).toEqual([
-      "UPI",
-      PAYMENT_METHOD_UNAVAILABLE,
-    ]);
+    expect(options.map((o) => o.value)).toEqual(["UPI", "CARD"]);
     expect(options.find((o) => o.value === "UPI")?.label).toBe("UPI");
-    expect(
-      options.find((o) => o.value === PAYMENT_METHOD_UNAVAILABLE)?.label,
-    ).toBe("Not available");
+    expect(options.find((o) => o.value === "CARD")?.label).toBe("Card");
   });
 });

@@ -111,6 +111,7 @@ export const MOCK_PAYMENTS = [
     status: "CAPTURED",
     method: "UPI" as const,
     hostedBy: "PARTNER" as const,
+    paymentType: "ALL_INCLUSIVE" as const,
   },
   {
     id: "p2",
@@ -121,6 +122,7 @@ export const MOCK_PAYMENTS = [
     status: "CAPTURED",
     method: "CARD" as const,
     hostedBy: "NYTO" as const,
+    paymentType: "PAY_OWN_BILL" as const,
   },
   {
     id: "p3",
@@ -131,6 +133,7 @@ export const MOCK_PAYMENTS = [
     status: "PENDING_PAYMENT",
     method: null,
     hostedBy: "NYTO" as const,
+    paymentType: "ALL_INCLUSIVE" as const,
   },
 ];
 
@@ -366,6 +369,13 @@ export const MOCK_GUESTS = [
     bookings: 4,
     lastVenue: "SkyGarden Madhapur",
     status: "ACTIVE",
+    gender: "man",
+    dateOfBirth: "1998-04-12T00:00:00.000Z",
+    socialEnergy: "ambiverted",
+    conversationStyle: "mixed",
+    tableOneLiner: "New in the city, into long dinners",
+    datingIntent: null,
+    interests: ["food", "startups", "travel", "music", "books"],
   },
   {
     id: "g2",
@@ -375,6 +385,13 @@ export const MOCK_GUESTS = [
     bookings: 2,
     lastVenue: "Hitech Terrace",
     status: "ACTIVE",
+    gender: "woman",
+    dateOfBirth: "1996-09-03T00:00:00.000Z",
+    socialEnergy: "introverted",
+    conversationStyle: "calm",
+    tableOneLiner: "Quiet nights, good wine, real talk",
+    datingIntent: null,
+    interests: ["wine", "art", "film", "yoga"],
   },
   {
     id: "g3",
@@ -384,6 +401,13 @@ export const MOCK_GUESTS = [
     bookings: 1,
     lastVenue: "Jubilee Supper Club",
     status: "ACTIVE",
+    gender: "man",
+    dateOfBirth: "1994-01-20T00:00:00.000Z",
+    socialEnergy: "extroverted",
+    conversationStyle: "lively",
+    tableOneLiner: "Founder · always up for a crowded table",
+    datingIntent: "open",
+    interests: ["startups", "tech", "cricket", "food"],
   },
   {
     id: "g4",
@@ -393,8 +417,90 @@ export const MOCK_GUESTS = [
     bookings: 0,
     lastVenue: "—",
     status: "NEW",
+    gender: "woman",
+    dateOfBirth: "1999-11-08T00:00:00.000Z",
+    socialEnergy: "ambiverted",
+    conversationStyle: null,
+    tableOneLiner: null,
+    datingIntent: null,
+    interests: ["books", "nature", "tea_coffee"],
   },
 ];
+
+/**
+ * Demo-only Guest Experience samples for admin presentations.
+ * Not loaded from APIs — always labeled as demo in the UI.
+ */
+export const DEMO_GUEST_COMPLAINTS = [
+  {
+    id: "demo-c1",
+    guest: "Ananya K",
+    venue: "Hitech Terrace",
+    when: "22 Oct · 21:40",
+    category: "Venue issue",
+    priority: "High",
+    status: "Under review",
+    summary: "Dining area was too loud — asked if quieter seating is possible next time.",
+  },
+  {
+    id: "demo-c2",
+    guest: "Rahul M",
+    venue: "Jubilee Supper Club",
+    when: "21 Oct · 19:15",
+    category: "Group experience",
+    priority: "Normal",
+    status: "Follow-up required",
+    summary: "Group chemistry felt off — wants a quick call before booking again.",
+  },
+  {
+    id: "demo-c3",
+    guest: "Sai Reddy",
+    venue: "SkyGarden Madhapur",
+    when: "20 Oct · 22:05",
+    category: "Service",
+    priority: "Normal",
+    status: "New",
+    summary: "First course took longer than expected — left a note after the night.",
+  },
+] as const;
+
+export const DEMO_GUEST_FOLLOWUPS = [
+  {
+    id: "demo-f1",
+    guest: "Rahul M",
+    venue: "Jubilee Supper Club",
+    dueDate: "25 Oct",
+    status: "Open",
+    action: "Phone call — check how the dining night went after his report.",
+  },
+  {
+    id: "demo-f2",
+    guest: "Ananya K",
+    venue: "Hitech Terrace",
+    dueDate: "24 Oct",
+    status: "In progress",
+    action: "Message the venue about quieter seating for her next visit.",
+  },
+] as const;
+
+export const DEMO_GUEST_FEEDBACK = [
+  {
+    id: "demo-fb1",
+    guest: "Priya Nair",
+    venue: "SkyGarden Madhapur",
+    when: "19 Oct",
+    rating: "Positive",
+    note: "Loved the pace of the night and the host check-in.",
+  },
+  {
+    id: "demo-fb2",
+    guest: "Ananya K",
+    venue: "Hitech Terrace",
+    when: "18 Oct",
+    rating: "Mixed",
+    note: "Food was great; ambient noise made conversation hard.",
+  },
+] as const;
 
 export const MOCK_TEAM = [
   {
