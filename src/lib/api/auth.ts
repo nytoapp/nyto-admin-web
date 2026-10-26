@@ -5,6 +5,7 @@ export async function requestEmailOtp(email: string) {
   return apiRequest<{
     ok: true;
     otpSent: boolean;
+    deliveryMode?: "resend" | "dev_log" | "skipped_test" | string;
     maskedEmail: string;
     expiresAt: string;
     resendAfterSeconds: number;

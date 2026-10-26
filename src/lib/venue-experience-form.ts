@@ -1,9 +1,10 @@
 import { experienceDisplayName } from "@/lib/booking-experience";
 import type { ExperienceCategory } from "@/lib/categories";
 import { statusLabel } from "@/lib/format";
-import type { AdminTable, VenueMenu } from "@/lib/types";
+import type { AdminTable, TablePaymentType, VenueMenu } from "@/lib/types";
 
 export type DietaryType = "VEGETARIAN" | "NON_VEGETARIAN" | "VEGAN";
+export type BillPaymentType = TablePaymentType;
 
 const DIETARY_TYPES: DietaryType[] = [
   "VEGETARIAN",
@@ -22,6 +23,17 @@ export function parseDietaryType(raw: unknown): DietaryType | null {
 export function dietaryDisplayLabel(raw: unknown): string {
   const parsed = parseDietaryType(raw);
   return parsed ? statusLabel(parsed) : "Diet unavailable";
+}
+
+const BILL_TYPES: BillPaymentType[] = ["ALL_INCLUSIVE", "PAY_OWN_BILL"];
+
+/** Parse night bill model. Defaults to ALL_INCLUSIVE only when publishing new nights. */
+export function parsePaymentType(raw: unknown): BillPaymentType | null {
+  if (raw == null) return null;
+  const s = String(raw).trim().toUpperCase().replace(/[\s-]+/g, "_");
+  if (s === "PAY_AS_YOU_GO" || s === "PAY_OWN") return "PAY_OWN_BILL";
+  if ((BILL_TYPES as string[]).includes(s)) return s as BillPaymentType;
+  return null;
 }
 
 /**
@@ -91,6 +103,8 @@ export type NightExperienceRow = {
   when: string;
   startsAtIso: string | null;
   capacity?: number;
+  /** Night bill model from API — All-inclusive vs Pay as you go. */
+  paymentType: BillPaymentType | null;
   /** From table seat allocation when the API provides it. */
   seatsTaken?: number | null;
   seatsLeft?: number | null;
@@ -186,6 +200,7 @@ export function mapTableToNightExperience(
         ? t.startsAt
         : null,
     capacity: Number.isFinite(t.capacity) ? t.capacity : undefined,
+    paymentType: parsePaymentType(t.paymentType),
     seatsTaken: Number.isFinite(t.seatsTaken as number)
       ? (t.seatsTaken as number)
       : null,
@@ -277,6 +292,7 @@ export function experienceEditFormValues(row: NightExperienceRow): {
   categories: ExperienceCategory[];
   startsAt: string;
   capacity: string;
+  paymentType: BillPaymentType;
 } {
   return {
     name: row.name,
@@ -289,5 +305,6 @@ export function experienceEditFormValues(row: NightExperienceRow): {
       row.categories.length > 0 ? [...row.categories] : (["WEEKLY"] as ExperienceCategory[]),
     startsAt: toDatetimeLocalInKolkata(row.startsAtIso),
     capacity: row.capacity != null ? String(row.capacity) : "",
+    paymentType: row.paymentType ?? "ALL_INCLUSIVE",
   };
 }

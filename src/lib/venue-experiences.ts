@@ -16,6 +16,7 @@ export type StoredNight = {
   when: string;
   startsAtIso?: string;
   capacity: number;
+  paymentType?: "ALL_INCLUSIVE" | "PAY_OWN_BILL" | null;
   status: "OPEN" | "FULL" | "CANCELLED";
 };
 

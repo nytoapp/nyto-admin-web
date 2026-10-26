@@ -39,7 +39,11 @@ type AuthState = {
   token: string | null;
   error: string | null;
   mockMode: boolean;
-  requestOtp: (email: string) => Promise<{ maskedEmail: string }>;
+  requestOtp: (email: string) => Promise<{
+    maskedEmail: string;
+    otpSent?: boolean;
+    deliveryMode?: string;
+  }>;
   verifyOtp: (email: string, code: string) => Promise<void>;
   logout: () => Promise<void>;
   getToken: () => Promise<string | null>;
@@ -183,7 +187,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     if (mockMode) return mockRequestOtp(email);
     const res = await requestEmailOtp(email.trim().toLowerCase());
-    return { maskedEmail: res.maskedEmail };
+    return {
+      maskedEmail: res.maskedEmail,
+      otpSent: res.otpSent,
+      deliveryMode: res.deliveryMode,
+    };
   }, [mockMode]);
 
   const verifyOtp = useCallback(
