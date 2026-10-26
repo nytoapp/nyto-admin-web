@@ -25,6 +25,7 @@ export default function TeamPage() {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
@@ -52,6 +53,7 @@ export default function TeamPage() {
       return;
     }
     setError(null);
+    setNotice(null);
     setBusy(true);
     try {
       if (mockMode) {
@@ -67,14 +69,21 @@ export default function TeamPage() {
         ]);
         setEmail("");
         setName("");
+        setNotice(
+          "Demo invite only — no email is sent in mock mode. Live invite reports real delivery.",
+        );
         return;
       }
       const token = await getToken();
       if (!token) throw new ApiError("Session expired.", 401);
-      await inviteAdmin(token, {
+      const res = await inviteAdmin(token, {
         email: email.trim().toLowerCase(),
         name: name.trim(),
       });
+      setNotice(
+        res.notification?.nextStep ??
+          "Admin access granted. They sign in with email OTP — no magic link.",
+      );
       setEmail("");
       setName("");
       await reload();
@@ -244,7 +253,8 @@ export default function TeamPage() {
               Grant admin access
             </h3>
             <p className="mt-1.5 text-[13px] leading-relaxed text-text-faint">
-              They get the full console. Sign-in is email OTP.
+              Role is granted immediately. Invite email only goes out when Resend
+              is configured — otherwise tell them to OTP in.
             </p>
           </div>
 
@@ -267,13 +277,18 @@ export default function TeamPage() {
               />
             </div>
             <FieldError message={error} />
+            {notice ? (
+              <p className="rounded-lg border border-border bg-bg-soft/80 px-3 py-2 text-[12px] leading-relaxed text-text-muted">
+                {notice}
+              </p>
+            ) : null}
             <Button type="submit" className="w-full" disabled={busy}>
               {busy ? "Inviting…" : "Grant admin access"}
             </Button>
             <ol className="space-y-1.5 border-t border-border-subtle pt-3 text-[12px] leading-relaxed text-text-faint">
-              <li>1. You invite with name + work email</li>
-              <li>2. Account is promoted to Admin</li>
-              <li>3. They sign in with OTP on that email</li>
+              <li>1. You grant Admin on that work email</li>
+              <li>2. Email is sent only if Resend is live</li>
+              <li>3. They sign in with OTP — no magic link</li>
             </ol>
           </div>
         </form>

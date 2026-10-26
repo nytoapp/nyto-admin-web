@@ -25,6 +25,7 @@ import {
   getVenue,
   listVenueMenus,
   listVenueTables,
+  patchTable,
   patchVenue,
   patchVenueMenu,
 } from "@/lib/api/venues";
@@ -35,7 +36,7 @@ import {
   type ExperienceCategory,
 } from "@/lib/categories";
 import { confirmDestructive } from "@/lib/console-settings";
-import { statusLabel } from "@/lib/format";
+import { billTypeLabel, statusLabel } from "@/lib/format";
 import { resolveHostedBy, type HostedBy } from "@/lib/hosted-by";
 import { useAdminResource } from "@/lib/hooks/useAdminResource";
 import { experienceDisplayName } from "@/lib/booking-experience";
@@ -47,6 +48,7 @@ import {
   nightCapacityLabel,
   parseDietaryType,
   selectOverviewDiningNights,
+  type BillPaymentType,
   type DietaryType,
   type NightExperienceRow,
 } from "@/lib/venue-experience-form";
@@ -219,6 +221,7 @@ export default function VenueDetailPage() {
             Date.now() + (i + 1) * 24 * 60 * 60 * 1000,
           ).toISOString(),
           capacity: e.capacity,
+          paymentType: null,
           seatsTaken: null,
           seatsLeft: null,
           status: "OPEN" as const,
@@ -254,6 +257,7 @@ export default function VenueDetailPage() {
             when: "No dining nights scheduled",
             startsAtIso: null as string | null,
             capacity: undefined as number | undefined,
+            paymentType: null,
             seatsTaken: null,
             seatsLeft: null,
             status: "OPEN" as const,
@@ -638,6 +642,9 @@ function OverviewDiningNights({
                       : "Dietary information unavailable"}
                   </span>
                   {capacityLine ? <span>{capacityLine}</span> : null}
+                  {billTypeLabel(n.paymentType) ? (
+                    <span>{billTypeLabel(n.paymentType)}</span>
+                  ) : null}
                 </div>
               </li>
             );
@@ -867,6 +874,7 @@ function toStoredNight(r: NightExperienceRow): StoredNight {
     when: r.when,
     startsAtIso: r.startsAtIso ?? undefined,
     capacity: r.capacity ?? 6,
+    paymentType: r.paymentType,
     status: r.status ?? "OPEN",
   };
 }
@@ -897,6 +905,8 @@ function ExperiencesPanel({
   ]);
   const [startsAt, setStartsAt] = useState("");
   const [capacity, setCapacity] = useState("");
+  const [paymentType, setPaymentType] =
+    useState<BillPaymentType>("ALL_INCLUSIVE");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -946,6 +956,7 @@ function ExperiencesPanel({
             when: live?.when || n.when,
             startsAtIso: live?.startsAtIso ?? n.startsAtIso ?? null,
             capacity: live?.capacity ?? n.capacity,
+            paymentType: live?.paymentType ?? n.paymentType ?? null,
             status: live?.status ?? n.status,
             tableId: n.tableId ?? live?.tableId,
             fromVenueDashboard: hostedBy === "PARTNER",
@@ -970,6 +981,7 @@ function ExperiencesPanel({
     setCategories(["WEEKLY"]);
     setStartsAt("");
     setCapacity("");
+    setPaymentType("ALL_INCLUSIVE");
     setError(null);
   }
 
@@ -983,6 +995,7 @@ function ExperiencesPanel({
     setCategories(values.categories);
     setCapacity(values.capacity);
     setStartsAt(values.startsAt);
+    setPaymentType(values.paymentType);
     setError(null);
   }
 
@@ -1069,6 +1082,7 @@ function ExperiencesPanel({
                     when: whenLabel ?? r.when,
                     startsAtIso: startsAtIso ?? r.startsAtIso,
                     capacity: cap,
+                    paymentType,
                   }
                 : r,
             ),
@@ -1088,6 +1102,7 @@ function ExperiencesPanel({
             when: whenLabel || "—",
             startsAtIso,
             capacity: cap,
+            paymentType,
             status: "OPEN",
           };
           persistRows([night, ...rows]);
@@ -1116,6 +1131,21 @@ function ExperiencesPanel({
           if (dietaryType) body.dietaryType = dietaryType;
           await patchVenueMenu(token, menuPatchId, body);
         }
+        if (existing?.tableId) {
+          const hour = startsAt
+            ? Number(startsAt.slice(11, 13))
+            : Number.NaN;
+          await patchTable(token, existing.tableId, {
+            seatPrice: costPerHead,
+            capacity: cap,
+            paymentType,
+            ...(startsAtIso ? { startsAt: startsAtIso } : {}),
+            ...(Number.isFinite(hour)
+              ? { priceTier: hour < 16 ? "DAYTIME" : "EVENING" }
+              : {}),
+            ...(categories[0] ? { tableType: categories[0] } : {}),
+          });
+        }
         upsertVenueNight(venueId, {
           id: editingId,
           name: name.trim() || existing?.name || experienceDisplayName(null),
@@ -1127,6 +1157,7 @@ function ExperiencesPanel({
           when: whenLabel ?? existing?.when ?? "—",
           startsAtIso: startsAtIso ?? existing?.startsAtIso ?? undefined,
           capacity: cap,
+          paymentType,
           status: existing?.status ?? "OPEN",
           tableId: existing?.tableId,
           menuId: menuPatchId ?? undefined,
@@ -1157,6 +1188,7 @@ function ExperiencesPanel({
         capacity: cap,
         priceTier,
         tableType: categories[0],
+        paymentType,
         menuId: menuRes.menu.id,
         status: "OPEN",
         hostedBy: "NYTO",
@@ -1176,6 +1208,7 @@ function ExperiencesPanel({
         when: whenLabel || "—",
         startsAtIso,
         capacity: cap,
+        paymentType,
         status: "OPEN",
       });
 
@@ -1264,6 +1297,7 @@ function ExperiencesPanel({
                     <th>Diet</th>
                     <th>Dining night</th>
                     <th>Capacity</th>
+                    <th>Bill type</th>
                     <th>Seat price</th>
                     <th />
                   </tr>
@@ -1320,6 +1354,9 @@ function ExperiencesPanel({
                         {m.capacity != null
                           ? `${m.capacity} seats`
                           : "Capacity unavailable"}
+                      </td>
+                      <td className="text-text-muted">
+                        {billTypeLabel(m.paymentType) ?? "—"}
                       </td>
                       <td className="tabular-nums">
                         {m.cost}
@@ -1448,6 +1485,18 @@ function ExperiencesPanel({
               value={capacity}
               onChange={(e) => setCapacity(e.target.value)}
             />
+          </div>
+          <div>
+            <Label>Bill type</Label>
+            <Select
+              value={paymentType}
+              onChange={(e) =>
+                setPaymentType(e.target.value as BillPaymentType)
+              }
+            >
+              <option value="ALL_INCLUSIVE">All-inclusive</option>
+              <option value="PAY_OWN_BILL">Pay as you go</option>
+            </Select>
           </div>
           <FieldError message={error} />
           <Button type="submit" className="w-full" disabled={busy}>

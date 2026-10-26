@@ -152,6 +152,20 @@ describe("mapTableToNightExperience + experienceEditFormValues", () => {
     expect(form.name).toBe(UNNAMED_EXPERIENCE);
   });
 
+  it("maps and edits paymentType (bill type)", () => {
+    const inclusive = mapTableToNightExperience(table(), null);
+    expect(inclusive.paymentType).toBe("ALL_INCLUSIVE");
+    expect(experienceEditFormValues(inclusive).paymentType).toBe(
+      "ALL_INCLUSIVE",
+    );
+    const payOwn = mapTableToNightExperience(
+      table({ paymentType: "PAY_OWN_BILL" }),
+      null,
+    );
+    expect(payOwn.paymentType).toBe("PAY_OWN_BILL");
+    expect(experienceEditFormValues(payOwn).paymentType).toBe("PAY_OWN_BILL");
+  });
+
   it("keeps night-level price and inclusions separate from the name", () => {
     const row = mapTableToNightExperience(table({ seatPrice: 1199 }), null);
     expect(row.name).toBe(UNNAMED_EXPERIENCE);

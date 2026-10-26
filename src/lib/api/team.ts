@@ -14,11 +14,21 @@ export async function listTeam(token: string) {
   });
 }
 
+export type DeliveryNotification = {
+  emailDelivered: boolean;
+  deliveryMode: string;
+  nextStep: string;
+};
+
 export async function inviteAdmin(
   token: string,
   body: { email: string; name: string },
 ) {
-  return apiRequest<{ ok: true; member: TeamMember }>("/admin/team/invite", {
+  return apiRequest<{
+    ok: true;
+    member: TeamMember;
+    notification?: DeliveryNotification;
+  }>("/admin/team/invite", {
     method: "POST",
     token,
     body,

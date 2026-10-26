@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import {
   ModuleFeed,
   ModuleFeedRow,
@@ -10,78 +11,149 @@ import {
   ModuleHero,
   ModulePill,
 } from "@/components/ui/ModuleShell";
+import { ErrorBanner } from "@/components/ui/Page";
+import { ApiError } from "@/lib/api/client";
+import {
+  listSupportTickets,
+  patchSupportTicket,
+  type AdminSupportTicket,
+} from "@/lib/api/support";
 import {
   DEMO_GUEST_COMPLAINTS,
   DEMO_GUEST_FEEDBACK,
   DEMO_GUEST_FOLLOWUPS,
 } from "@/lib/mock/data";
+import { useAuth } from "@/providers/auth-provider";
 
-/**
- * Guest Experience = support inbox for guest issues from the NYTO app.
- * Live complaint APIs are not connected yet. This page shows labeled demo
- * samples for presentations — not live guest submissions.
- */
+type InboxTab = "venue" | "complaints" | "followups" | "feedback";
 
-type InboxTab = "complaints" | "followups" | "feedback";
+function ticketStatusTone(
+  s: string,
+): "accent" | "warning" | "success" | "neutral" {
+  const u = s.toUpperCase();
+  if (u === "OPEN") return "accent";
+  if (u === "IN_REVIEW") return "warning";
+  if (u === "RESOLVED") return "success";
+  return "neutral";
+}
 
 export default function GuestExperiencePage() {
-  const [tab, setTab] = useState<InboxTab>("complaints");
+  const { mockMode, getToken } = useAuth();
+  const [tab, setTab] = useState<InboxTab>("venue");
+  const [tickets, setTickets] = useState<AdminSupportTicket[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
+  async function reloadVenueTickets() {
+    if (mockMode) {
+      setTickets([]);
+      return;
+    }
+    setLoadError(null);
+    try {
+      const token = await getToken();
+      if (!token) throw new ApiError("Session expired.", 401);
+      const res = await listSupportTickets(token, { source: "VENUE" });
+      setTickets(res.tickets);
+    } catch (err) {
+      setLoadError(
+        err instanceof Error ? err.message : "Could not load venue tickets.",
+      );
+      setTickets([]);
+    }
+  }
+
+  useEffect(() => {
+    void reloadVenueTickets();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mockMode]);
+
+  const openVenue = tickets.filter((t) => t.status === "OPEN").length;
   const openComplaints = DEMO_GUEST_COMPLAINTS.length;
   const followUpsDue = DEMO_GUEST_FOLLOWUPS.length;
   const feedbackCount = DEMO_GUEST_FEEDBACK.length;
-  const newReports = DEMO_GUEST_COMPLAINTS.filter(
-    (c) => c.status === "New",
-  ).length;
 
   const list = useMemo(() => {
     if (tab === "followups") return { kind: "followups" as const };
     if (tab === "feedback") return { kind: "feedback" as const };
+    if (tab === "venue") return { kind: "venue" as const };
     return { kind: "complaints" as const };
   }, [tab]);
+
+  async function setStatus(
+    id: string,
+    status: "OPEN" | "IN_REVIEW" | "RESOLVED",
+  ) {
+    if (mockMode || busyId) return;
+    setBusyId(id);
+    try {
+      const token = await getToken();
+      if (!token) throw new ApiError("Session expired.", 401);
+      const res = await patchSupportTicket(token, id, status);
+      setTickets((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, ...res.ticket } : t)),
+      );
+    } catch (err) {
+      setLoadError(
+        err instanceof Error ? err.message : "Could not update ticket.",
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   return (
     <div className="nyto-fade mx-auto max-w-5xl">
       <ModuleHero
         eyebrow="Operations"
         title="Guest Experience"
-        description="Issues, complaints, and follow-ups guests raise from the NYTO app."
+        description="Venue Contact NYTO tickets sync live. Guest-app complaints stay demo until that API ships."
         stats={[
           {
-            label: "Open complaints",
+            label: "Venue tickets open",
+            value: mockMode ? "—" : String(openVenue),
+            hint: "From venue portal",
+          },
+          {
+            label: "Demo complaints",
             value: String(openComplaints),
-            hint: "Needs review",
+            hint: "Sample only",
+            soft: true,
           },
           {
             label: "Follow-ups due",
             value: String(followUpsDue),
-            hint: "Next actions",
+            hint: "Demo samples",
+            soft: true,
           },
           {
             label: "Guest feedback",
             value: String(feedbackCount),
-            hint: "Recent notes",
-            soft: true,
-          },
-          {
-            label: "New reports",
-            value: String(newReports),
-            hint: "Unread",
+            hint: "Demo samples",
             soft: true,
           },
         ]}
       />
 
-      <p className="mb-4 rounded-xl border border-accent/25 bg-[var(--accent-wash)] px-4 py-2.5 text-[12px] leading-relaxed text-accent-soft">
-        Sample inbox for demo — not live guest reports.
-      </p>
+      {loadError ? (
+        <ErrorBanner
+          message={loadError}
+          onRetry={() => void reloadVenueTickets()}
+        />
+      ) : null}
 
       <ModuleFilters>
         <div className="flex flex-wrap gap-1.5">
           <ModulePill
+            active={tab === "venue"}
+            onClick={() => setTab("venue")}
+            label="Venue tickets"
+            count={mockMode ? undefined : tickets.length}
+          />
+          <ModulePill
             active={tab === "complaints"}
             onClick={() => setTab("complaints")}
-            label="Complaints"
+            label="Guest complaints"
             count={DEMO_GUEST_COMPLAINTS.length}
           />
           <ModulePill
@@ -106,136 +178,158 @@ export default function GuestExperiencePage() {
           </p>
         </div>
 
-        {list.kind === "complaints" ? (
-          <ModuleFeed>
-            {DEMO_GUEST_COMPLAINTS.map((c) => (
-              <li
-                key={c.id}
-                className="border-b border-border-subtle last:border-0"
-              >
-                <ModuleFeedRow>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-[15px] font-semibold text-ink">
-                          {c.guest}
+        {list.kind === "venue" ? (
+          mockMode ? (
+            <p className="px-5 py-8 text-[13px] text-text-muted">
+              Switch Admin to live auth to see venue Contact NYTO tickets from
+              Postgres.
+            </p>
+          ) : tickets.length === 0 ? (
+            <p className="px-5 py-8 text-[13px] text-text-muted">
+              No venue tickets yet. Partner kitchens file them from Contact NYTO.
+            </p>
+          ) : (
+            <ModuleFeed>
+              {tickets.map((t) => (
+                <li
+                  key={t.id}
+                  className="border-b border-border-subtle last:border-0"
+                >
+                  <ModuleFeedRow>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-[15px] font-semibold text-ink">
+                            {t.subject}
+                          </p>
+                          <Badge tone={ticketStatusTone(t.status)}>
+                            {t.status.replace("_", " ")}
+                          </Badge>
+                          <Badge tone="neutral">{t.category}</Badge>
+                        </div>
+                        <p className="mt-1 text-[13px] text-text-muted">
+                          {t.venue?.name ?? "Venue"}
+                          {t.venue?.area ? ` · ${t.venue.area}` : ""}
+                          {t.staff?.email ? ` · ${t.staff.email}` : ""}
                         </p>
-                        <Badge tone="accent">Demo</Badge>
+                        <p className="mt-2 text-[14px] leading-relaxed text-text-muted">
+                          {t.message}
+                        </p>
                       </div>
-                      <p className="mt-1 text-[13px] text-text-muted">
-                        {[c.venue, c.when, c.category].join(" · ")}
-                      </p>
-                      <p className="mt-1.5 text-[13px] leading-snug text-text">
-                        {c.summary}
-                      </p>
+                      <div className="flex flex-wrap gap-2 sm:justify-end">
+                        {t.venue?.id ? (
+                          <Link href={`/venues/${t.venue.id}`}>
+                            <Button variant="ghost">Open venue</Button>
+                          </Link>
+                        ) : null}
+                        {t.status !== "IN_REVIEW" ? (
+                          <Button
+                            variant="secondary"
+                            disabled={busyId === t.id}
+                            onClick={() => void setStatus(t.id, "IN_REVIEW")}
+                          >
+                            Reviewing
+                          </Button>
+                        ) : null}
+                        {t.status !== "RESOLVED" ? (
+                          <Button
+                            disabled={busyId === t.id}
+                            onClick={() => void setStatus(t.id, "RESOLVED")}
+                          >
+                            Resolve
+                          </Button>
+                        ) : null}
+                      </div>
                     </div>
-                    <div className="flex shrink-0 flex-col items-start gap-1.5 sm:items-end">
-                      <Badge
-                        tone={
-                          c.priority === "High" ? "warning" : "neutral"
-                        }
-                      >
-                        {c.priority}
-                      </Badge>
-                      <Badge tone="neutral">{c.status}</Badge>
+                  </ModuleFeedRow>
+                </li>
+              ))}
+            </ModuleFeed>
+          )
+        ) : null}
+
+        {list.kind === "complaints" ? (
+          <>
+            <p className="border-b border-border-subtle px-5 py-2.5 text-[12px] text-accent-soft">
+              Sample guest complaints — not live app reports yet.
+            </p>
+            <ModuleFeed>
+              {DEMO_GUEST_COMPLAINTS.map((c) => (
+                <li
+                  key={c.id}
+                  className="border-b border-border-subtle last:border-0"
+                >
+                  <ModuleFeedRow>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-[15px] font-semibold text-ink">
+                        {c.guest}
+                      </p>
+                      <Badge tone="warning">{c.status}</Badge>
+                      <Badge tone="neutral">{c.category}</Badge>
                     </div>
-                  </div>
-                </ModuleFeedRow>
-              </li>
-            ))}
-          </ModuleFeed>
+                    <p className="mt-1 text-[13px] text-text-muted">
+                      {c.venue} · {c.when}
+                    </p>
+                    <p className="mt-2 text-[14px] text-text-muted">{c.summary}</p>
+                  </ModuleFeedRow>
+                </li>
+              ))}
+            </ModuleFeed>
+          </>
         ) : null}
 
         {list.kind === "followups" ? (
-          <ModuleFeed>
-            {DEMO_GUEST_FOLLOWUPS.map((f) => (
-              <li
-                key={f.id}
-                className="border-b border-border-subtle last:border-0"
-              >
-                <ModuleFeedRow>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-[15px] font-semibold text-ink">
-                          {f.guest}
-                        </p>
-                        <Badge tone="accent">Demo</Badge>
-                      </div>
-                      <p className="mt-1 text-[13px] text-text-muted">
-                        {f.venue} · Due {f.dueDate}
-                      </p>
-                      <p className="mt-1.5 text-[13px] leading-snug text-text">
-                        {f.action}
-                      </p>
-                    </div>
-                    <Badge tone="neutral">{f.status}</Badge>
-                  </div>
-                </ModuleFeedRow>
-              </li>
-            ))}
-          </ModuleFeed>
+          <>
+            <p className="border-b border-border-subtle px-5 py-2.5 text-[12px] text-accent-soft">
+              Demo follow-ups.
+            </p>
+            <ModuleFeed>
+              {DEMO_GUEST_FOLLOWUPS.map((f) => (
+                <li
+                  key={f.id}
+                  className="border-b border-border-subtle last:border-0"
+                >
+                  <ModuleFeedRow>
+                    <p className="text-[15px] font-semibold text-ink">
+                      {f.guest} · {f.venue}
+                    </p>
+                    <p className="mt-1 text-[13px] text-text-muted">
+                      Due {f.dueDate} · {f.status}
+                    </p>
+                    <p className="mt-2 text-[14px] text-text-muted">{f.action}</p>
+                  </ModuleFeedRow>
+                </li>
+              ))}
+            </ModuleFeed>
+          </>
         ) : null}
 
         {list.kind === "feedback" ? (
-          <ModuleFeed>
-            {DEMO_GUEST_FEEDBACK.map((fb) => (
-              <li
-                key={fb.id}
-                className="border-b border-border-subtle last:border-0"
-              >
-                <ModuleFeedRow>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-[15px] font-semibold text-ink">
-                          {fb.guest}
-                        </p>
-                        <Badge tone="accent">Demo</Badge>
-                      </div>
-                      <p className="mt-1 text-[13px] text-text-muted">
-                        {[fb.venue, fb.when].join(" · ")}
-                      </p>
-                      <p className="mt-1.5 text-[13px] leading-snug text-text">
-                        {fb.note}
-                      </p>
-                    </div>
-                    <Badge
-                      tone={
-                        fb.rating === "Positive"
-                          ? "success"
-                          : fb.rating === "Mixed"
-                            ? "warning"
-                            : "neutral"
-                      }
-                    >
-                      {fb.rating}
-                    </Badge>
-                  </div>
-                </ModuleFeedRow>
-              </li>
-            ))}
-          </ModuleFeed>
+          <>
+            <p className="border-b border-border-subtle px-5 py-2.5 text-[12px] text-accent-soft">
+              Demo feedback.
+            </p>
+            <ModuleFeed>
+              {DEMO_GUEST_FEEDBACK.map((f) => (
+                <li
+                  key={f.id}
+                  className="border-b border-border-subtle last:border-0"
+                >
+                  <ModuleFeedRow>
+                    <p className="text-[15px] font-semibold text-ink">
+                      {f.guest} · {f.rating}
+                    </p>
+                    <p className="mt-1 text-[13px] text-text-muted">
+                      {f.venue} · {f.when}
+                    </p>
+                    <p className="mt-2 text-[14px] text-text-muted">{f.note}</p>
+                  </ModuleFeedRow>
+                </li>
+              ))}
+            </ModuleFeed>
+          </>
         ) : null}
       </section>
-
-      <p className="mt-5 text-[13px] text-text-muted">
-        Live reservations stay in{" "}
-        <Link
-          href="/bookings"
-          className="font-semibold text-accent hover:underline"
-        >
-          Bookings
-        </Link>
-        . Profiles stay in{" "}
-        <Link
-          href="/guests"
-          className="font-semibold text-accent hover:underline"
-        >
-          Guests
-        </Link>
-        .
-      </p>
     </div>
   );
 }

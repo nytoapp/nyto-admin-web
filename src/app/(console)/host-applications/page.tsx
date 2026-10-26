@@ -176,6 +176,7 @@ export default function HostApplicationsPage() {
   }, [searchParams]);
   const [localRows, setLocalRows] = useState<HostRow[] | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [linkVenueId, setLinkVenueId] = useState<Record<string, string>>({});
 
@@ -243,16 +244,24 @@ export default function HostApplicationsPage() {
 
     setBusyId(id);
     setActionError(null);
+    setActionNotice(null);
     try {
       if (mockMode) {
         setLocalRows(
           rows.map((r) => (r.id === id ? { ...r, status: "APPROVED" } : r)),
         );
+        setActionNotice(
+          "Demo approve only — no email is sent in mock mode. Live approve reports real delivery.",
+        );
         return;
       }
       const token = await getToken();
       if (!token) throw new ApiError("Session expired.", 401);
-      await approveHostApplication(token, id, linkId || undefined);
+      const res = await approveHostApplication(token, id, linkId || undefined);
+      setActionNotice(
+        res.notification?.nextStep ??
+          "Access granted. Host signs in at the venue portal with email OTP.",
+      );
       setLocalRows(null);
       await reload();
       await venues.reload();
@@ -298,7 +307,7 @@ export default function HostApplicationsPage() {
       <ModuleHero
         eyebrow="Network"
         title="Requests & Approvals"
-        description="Review Venue-organized onboarding. Approve creates or links a venue through the existing API — venues appear on Venues only after that succeeds."
+        description="Review Venue-organized onboarding. Approve creates or links a venue — email is sent only when Resend is configured; otherwise we tell you to notify the host yourself."
         stats={[
           {
             label: "Awaiting review",
@@ -325,6 +334,19 @@ export default function HostApplicationsPage() {
           message={actionError}
           onRetry={() => setActionError(null)}
         />
+      ) : null}
+      {actionNotice ? (
+        <div className="mx-auto mb-4 max-w-5xl rounded-xl border border-border bg-bg-elevated/80 px-4 py-3 text-[13px] leading-relaxed text-text-muted">
+          <p className="font-semibold text-ink">Activation</p>
+          <p className="mt-1">{actionNotice}</p>
+          <button
+            type="button"
+            className="mt-2 text-[12px] font-semibold text-accent-soft"
+            onClick={() => setActionNotice(null)}
+          >
+            Dismiss
+          </button>
+        </div>
       ) : null}
 
       <ModuleFilters>

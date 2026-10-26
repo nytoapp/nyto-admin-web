@@ -15,6 +15,7 @@ export default function LoginPage() {
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"email" | "code">("email");
   const [masked, setMasked] = useState("");
+  const [otpHint, setOtpHint] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -43,6 +44,13 @@ export default function LoginPage() {
     try {
       const res = await requestOtp(email);
       setMasked(res.maskedEmail);
+      setOtpHint(
+        res.otpSent
+          ? null
+          : res.deliveryMode === "skipped_test"
+            ? "Test destination — use your configured test OTP (email was not sent)."
+            : "Email provider is off — code was not emailed. Use a test OTP or configure Resend.",
+      );
       setCode("");
       setStep("code");
     } catch (err) {
@@ -216,8 +224,15 @@ export default function LoginPage() {
               <p className="mt-2 text-[13px] leading-relaxed text-text-muted">
                 {step === "email"
                   ? "Continue with your founder email to open the console."
-                  : `Code sent to ${masked}`}
+                  : otpHint
+                    ? `Code ready for ${masked}`
+                    : `Code sent to ${masked}`}
               </p>
+              {otpHint ? (
+                <p className="mt-2 text-[12px] leading-relaxed text-warning">
+                  {otpHint}
+                </p>
+              ) : null}
             </div>
 
             {step === "email" ? (

@@ -64,6 +64,9 @@ export default function NewVenuePage() {
   const [seatPrice, setSeatPrice] = useState("");
   const [capacity, setCapacity] = useState("");
   const [startsAt, setStartsAt] = useState("");
+  const [paymentType, setPaymentType] = useState<
+    "ALL_INCLUSIVE" | "PAY_OWN_BILL"
+  >("ALL_INCLUSIVE");
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -154,6 +157,7 @@ export default function NewVenuePage() {
         capacity: seats,
         priceTier: priceTierFromLocalDatetime(startsAt),
         tableType: categories[0],
+        paymentType,
         menuId: menuRes.menu.id,
         status: "OPEN",
         hostedBy: "NYTO",
@@ -406,6 +410,20 @@ export default function NewVenuePage() {
                     onChange={(e) => setCapacity(e.target.value)}
                   />
                 </div>
+              </div>
+              <div>
+                <Label>Bill type</Label>
+                <Select
+                  value={paymentType}
+                  onChange={(e) =>
+                    setPaymentType(
+                      e.target.value as "ALL_INCLUSIVE" | "PAY_OWN_BILL",
+                    )
+                  }
+                >
+                  <option value="ALL_INCLUSIVE">All-inclusive</option>
+                  <option value="PAY_OWN_BILL">Pay as you go</option>
+                </Select>
               </div>
             </section>
 

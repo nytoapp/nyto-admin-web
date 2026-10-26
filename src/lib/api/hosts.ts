@@ -46,15 +46,26 @@ export async function listHostApplications(
   );
 }
 
+export type DeliveryNotification = {
+  emailDelivered: boolean;
+  deliveryMode: string;
+  nextStep: string;
+};
+
 export async function approveHostApplication(
   token: string,
   id: string,
   venueId?: string,
 ) {
-  return apiRequest<{ ok: true; application: HostApplication }>(
-    `/admin/host-applications/${id}/approve`,
-    { method: "POST", token, body: { venueId } },
-  );
+  return apiRequest<{
+    ok: true;
+    application: HostApplication;
+    notification?: DeliveryNotification;
+  }>(`/admin/host-applications/${id}/approve`, {
+    method: "POST",
+    token,
+    body: { venueId },
+  });
 }
 
 export async function rejectHostApplication(
