@@ -33,6 +33,13 @@ export async function cancelBooking(
   );
 }
 
+export async function markBookingNoShow(token: string, bookingId: string) {
+  return apiRequest<{ ok: true; booking: AdminBooking }>(
+    `/admin/bookings/${bookingId}/no-show`,
+    { method: "POST", token },
+  );
+}
+
 export async function listPayments(token: string) {
   return apiRequest<{ ok: true; payments: AdminPayment[] }>("/admin/payments", {
     token,

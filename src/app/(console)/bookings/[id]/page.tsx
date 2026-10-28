@@ -14,6 +14,7 @@ import {
 import {
   cancelBooking,
   getBooking,
+  markBookingNoShow,
   refundPayment,
 } from "@/lib/api/bookings";
 import { ApiError } from "@/lib/api/client";
@@ -213,6 +214,40 @@ export default function BookingDetailPage() {
     }
   }
 
+  async function onMarkNoShow() {
+    if (!booking) return;
+    if (
+      !confirmDestructive(
+        "Mark this guest as no-show? They can still check in late at the door.",
+      )
+    ) {
+      return;
+    }
+    setActionError(null);
+    setBusy(true);
+    try {
+      if (mockMode) {
+        setLocal({
+          ...booking,
+          status: "NO_SHOW",
+          cancelReason: "NO_SHOW",
+        });
+        return;
+      }
+      const token = await getToken();
+      if (!token) throw new ApiError("Session expired.", 401);
+      await markBookingNoShow(token, booking.id);
+      setLocal(null);
+      await reload();
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : "Could not mark no-show.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onRefund() {
     if (!booking?.paymentId) return;
     if (
@@ -277,6 +312,11 @@ export default function BookingDetailPage() {
     booking.status !== "CANCELLED" &&
     booking.status !== "ATTENDED" &&
     booking.status !== "NO_SHOW";
+  const nightStarted = booking.startsAtIso
+    ? new Date(booking.startsAtIso).getTime() <= Date.now()
+    : false;
+  const canMarkNoShow =
+    booking.status === "CONFIRMED" && nightStarted;
   const canRefund =
     Boolean(booking.paymentId) && booking.paymentStatus === "CAPTURED";
   const cancelNote = cleanCancelReason(booking.cancelReason);
@@ -645,7 +685,7 @@ export default function BookingDetailPage() {
         </p>
       ) : null}
 
-      {(canCancel || canRefund) && (
+      {(canCancel || canRefund || canMarkNoShow) && (
         <div className="mt-5 flex flex-wrap gap-2">
           {canCancel ? (
             <Button
@@ -654,6 +694,15 @@ export default function BookingDetailPage() {
               onClick={() => void onCancel()}
             >
               {busy ? "Working…" : "Cancel booking"}
+            </Button>
+          ) : null}
+          {canMarkNoShow ? (
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={() => void onMarkNoShow()}
+            >
+              {busy ? "Working…" : "Mark no-show"}
             </Button>
           ) : null}
           {canRefund ? (

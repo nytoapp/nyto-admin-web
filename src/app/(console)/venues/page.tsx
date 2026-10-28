@@ -19,6 +19,7 @@ import {
   ErrorBanner,
   Skeleton,
 } from "@/components/ui/Page";
+import { listTables } from "@/lib/api/tables";
 import { listVenues } from "@/lib/api/venues";
 import {
   EXPERIENCE_CATEGORIES,
@@ -30,11 +31,7 @@ import { useAdminResource } from "@/lib/hooks/useAdminResource";
 import { venueNetworkKpis } from "@/lib/kpi";
 import { mapVenueRow } from "@/lib/mappers";
 import { MOCK_VENUES } from "@/lib/mock/data";
-import {
-  categoriesForVenue,
-  venueMatchesNightPhase,
-  type NightPhaseFilter,
-} from "@/lib/venue-experiences";
+import type { NightPhaseFilter } from "@/lib/venue-experiences";
 import {
   contactCountForVenue,
   loadVenueHostedBy,
@@ -75,8 +72,51 @@ export default function VenuesPage() {
   const { data, loading, error, reload } = useAdminResource(
     !mockMode,
     async (token) => {
-      const res = await listVenues(token);
-      return res.venues.map(mapVenueRow);
+      const [venuesRes, tablesRes] = await Promise.all([
+        listVenues(token),
+        listTables(token),
+      ]);
+      const nowMs = Date.now();
+      const byVenue = new Map<
+        string,
+        { categories: Set<ExperienceCategory>; phase: VenueListRow["nightPhase"] }
+      >();
+      for (const t of tablesRes.tables) {
+        const venueId = t.venueId || t.venue?.id;
+        if (!venueId) continue;
+        const cur = byVenue.get(venueId) ?? {
+          categories: new Set<ExperienceCategory>(),
+          phase: "none",
+        };
+        const tt = String(t.tableType ?? "").toUpperCase();
+        if (
+          tt === "WEEKLY" ||
+          tt === "WOMEN_LED" ||
+          tt === "COUPLES" ||
+          tt === "SINGLES"
+        ) {
+          cur.categories.add(tt as ExperienceCategory);
+        }
+        const status = String(t.status ?? "").toUpperCase();
+        const starts = new Date(t.startsAt).getTime();
+        if (status === "CANCELLED") {
+          if (cur.phase === "none") cur.phase = "cancelled";
+        } else if (Number.isFinite(starts) && starts > nowMs) {
+          cur.phase = "upcoming";
+        }
+        byVenue.set(venueId, cur);
+      }
+      return venuesRes.venues.map((v) => {
+        const row = mapVenueRow(v);
+        const meta = byVenue.get(row.id);
+        return {
+          ...row,
+          liveCategories: meta
+            ? ([...meta.categories] as ExperienceCategory[])
+            : ([] as ExperienceCategory[]),
+          liveNightPhase: (meta?.phase ?? "none") as VenueListRow["nightPhase"],
+        };
+      });
     },
   );
 
@@ -107,31 +147,18 @@ export default function VenuesPage() {
                 ? "cancelled"
                 : "none") as VenueListRow["nightPhase"],
         }))
-      : (data ?? []).map((v) => {
-          const cats = categoriesForVenue(v.id);
-          let phase: VenueListRow["nightPhase"] = "none";
-          if (venueMatchesNightPhase(v.id, "upcoming")) phase = "upcoming";
-          else if (venueMatchesNightPhase(v.id, "cancelled"))
-            phase = "cancelled";
-          const localContacts = contactCountForVenue(v.id, 0);
-          return {
-            id: v.id,
-            name: v.name,
-            area: v.area,
-            city: v.city,
-            tables: v.tables,
-            active: v.active,
-            hostedBy: resolveHostedBy(v.hostedBy),
-            contacts:
-              localContacts > 0
-                ? localContacts
-                : v.staff != null
-                  ? v.staff
-                  : localContacts,
-            categories: cats,
-            nightPhase: phase,
-          };
-        });
+      : (data ?? []).map((v) => ({
+          id: v.id,
+          name: v.name,
+          area: v.area,
+          city: v.city,
+          tables: v.tables,
+          active: v.active,
+          hostedBy: resolveHostedBy(v.hostedBy),
+          contacts: v.staff != null ? v.staff : 0,
+          categories: v.liveCategories,
+          nightPhase: v.liveNightPhase,
+        }));
   }, [mockMode, data, metaTick]);
 
   const filtered = useMemo(() => {
