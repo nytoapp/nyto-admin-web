@@ -195,10 +195,12 @@ describe("uniqueGuestCount", () => {
 });
 
 describe("GUEST_EXPERIENCE_API_GAPS", () => {
-  it("documents complaints, follow-ups, and notifications", () => {
+  it("documents remaining ops gaps (support path is already live)", () => {
     const ids = GUEST_EXPERIENCE_API_GAPS.map((g) => g.id);
-    expect(ids).toContain("complaints");
-    expect(ids).toContain("followups");
+    expect(ids).toContain("arrival");
     expect(ids).toContain("notifications");
+    expect(ids).toContain("reminders");
+    expect(ids).not.toContain("complaints");
+    expect(ids).not.toContain("feedback");
   });
 });

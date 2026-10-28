@@ -20,15 +20,23 @@ export type AdminSupportTicket = {
     firstName?: string | null;
     email?: string | null;
   } | null;
+  user?: {
+    id: string;
+    fullName?: string | null;
+    firstName?: string | null;
+    email?: string | null;
+    phone?: string | null;
+  } | null;
 };
 
 export async function listSupportTickets(
   token: string,
-  opts?: { status?: string; source?: string },
+  opts?: { status?: string; source?: string; category?: string },
 ) {
   const q = new URLSearchParams();
   if (opts?.status) q.set("status", opts.status);
   if (opts?.source) q.set("source", opts.source);
+  if (opts?.category) q.set("category", opts.category);
   const suffix = q.toString() ? `?${q}` : "";
   return apiRequest<{ ok: true; tickets: AdminSupportTicket[] }>(
     `/admin/support${suffix}`,

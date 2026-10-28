@@ -153,36 +153,22 @@ export function attendanceDisplayLabel(status: string): string {
   return `Booking · ${status}`;
 }
 
+/**
+ * Honest remaining gaps. SupportTicket (venue + guest Help Center / FEEDBACK)
+ * is live — do not list those as missing.
+ */
 export const GUEST_EXPERIENCE_API_GAPS = [
-  {
-    id: "complaints",
-    title: "Complaint / report records",
-    detail:
-      "No Complaint or Report model or admin API. Need persisted reports with guest, booking, venue, category, description, priority, status, and assignment.",
-  },
-  {
-    id: "followups",
-    title: "Follow-up case records",
-    detail:
-      "No FollowUp model or admin API. Need cases with due date, assignee, status workflow, and action history.",
-  },
-  {
-    id: "feedback",
-    title: "Guest feedback",
-    detail:
-      "No feedback/rating entity on admin APIs. Cannot show post-night scores without inventing them.",
-  },
   {
     id: "arrival",
     title: "Physical arrival confirmation",
     detail:
-      "TableMember.attended exists in the database but is not exposed on admin booking endpoints. Admin only has booking status.",
+      "TableMember.attended exists in the database but is not exposed on admin booking endpoints. Admin only has booking status (ATTENDED set by door check-in).",
   },
   {
     id: "notifications",
     title: "Instant admin notifications",
     detail:
-      "Socket.IO is used for guest table chat only. No admin complaint event channel or persisted notification inbox.",
+      "Socket.IO covers venue door/inventory + guest chat. No admin push channel when a SupportTicket is created.",
   },
   {
     id: "reminders",

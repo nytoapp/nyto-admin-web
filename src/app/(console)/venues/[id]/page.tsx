@@ -18,16 +18,20 @@ import {
 } from "@/components/ui/Page";
 import { ApiError } from "@/lib/api/client";
 import {
+  assignVenueStaff,
   cancelTable,
   createVenueMenu,
   createVenueTable,
   deleteVenueMenu,
   getVenue,
   listVenueMenus,
+  listVenueStaff,
   listVenueTables,
   patchTable,
   patchVenue,
   patchVenueMenu,
+  removeVenueStaff,
+  type VenueStaffRow,
 } from "@/lib/api/venues";
 import {
   EXPERIENCE_CATEGORIES,
@@ -66,7 +70,6 @@ import {
   MOCK_VENUES,
 } from "@/lib/mock/data";
 import {
-  formatShiftRange,
   loadVenueContacts,
   saveVenueContacts,
   type VenueContact,
@@ -381,7 +384,11 @@ export default function VenueDetailPage() {
             />
             <StatCard
               label="Contacts"
-              value={String(contactCountForVenue(venueId, 0))}
+              value={String(
+                mockMode
+                  ? contactCountForVenue(venueId, MOCK_VENUE_CONTACTS.length)
+                  : (data?.venue?._count?.staff ?? 0),
+              )}
               accent="success"
             />
           </div>
@@ -421,7 +428,11 @@ export default function VenueDetailPage() {
       ) : null}
 
       {tab === "contacts" ? (
-        <ContactsPanel venueId={venueId} mockMode={mockMode} />
+        <ContactsPanel
+          venueId={venueId}
+          mockMode={mockMode}
+          onChanged={() => void reload()}
+        />
       ) : null}
 
       <p className="mt-8 text-[13px] text-text-faint">
@@ -922,14 +933,15 @@ function ExperiencesPanel({
     const byId = new Map(initial.map((r) => [r.id, r] as const));
     const stored = loadVenueNights(venueId);
 
-    // Prefer live API rows when present so localStorage cannot invent diet/time/name.
+    // Live API is authoritative — never invent nights from localStorage.
     if (initial.length > 0) {
       setRows(initial);
       saveVenueNights(venueId, initial.map(toStoredNight));
       return;
     }
 
-    if (stored.length > 0) {
+    // Demo / mock-only fallback when API returned nothing.
+    if (mockMode && stored.length > 0) {
       setRows(
         stored.map((n) => {
           const live =
@@ -963,10 +975,11 @@ function ExperiencesPanel({
           } satisfies NightExperienceRow;
         }),
       );
-    } else {
-      setRows(initial);
+      return;
     }
-  }, [initial, venueId, hostedBy]);
+
+    setRows(initial);
+  }, [initial, venueId, hostedBy, mockMode]);
 
   function persistRows(next: NightExperienceRow[]) {
     setRows(next);
@@ -1522,96 +1535,190 @@ function ExperiencesPanel({
   );
 }
 
+type StaffRole = "OWNER" | "MANAGER" | "STAFF";
+
+type ContactRow = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  staffRole: StaffRole | string;
+};
+
+function staffToContact(s: VenueStaffRow): ContactRow {
+  const name =
+    s.user.fullName?.trim() ||
+    s.user.firstName?.trim() ||
+    s.user.email?.split("@")[0] ||
+    "Staff";
+  return {
+    id: s.id,
+    name,
+    email: s.user.email?.trim() || "",
+    phone: s.user.phone?.trim() || "",
+    staffRole: s.staffRole,
+  };
+}
+
+function mockContactToRow(c: VenueContact): ContactRow {
+  return {
+    id: c.id,
+    name: c.name,
+    email: c.email,
+    phone: c.phone,
+    staffRole: "STAFF",
+  };
+}
+
+function roleLabel(role: string): string {
+  const u = role.toUpperCase();
+  if (u === "OWNER") return "Owner";
+  if (u === "MANAGER") return "Manager";
+  return "Staff";
+}
+
 function ContactsPanel({
   venueId,
   mockMode,
+  onChanged,
 }: {
   venueId: string;
   mockMode: boolean;
+  onChanged?: () => void;
 }) {
-  const [rows, setRows] = useState<VenueContact[]>([]);
+  const { getToken } = useAuth();
+  const [rows, setRows] = useState<ContactRow[]>([]);
+  const [loading, setLoading] = useState(!mockMode);
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [shiftStart, setShiftStart] = useState("");
-  const [shiftEnd, setShiftEnd] = useState("");
+  const [staffRole, setStaffRole] = useState<StaffRole>("STAFF");
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    const stored = loadVenueContacts(venueId);
-    if (stored && stored.length > 0) {
-      setRows(stored);
-      return;
+  async function reloadLive() {
+    setLoading(true);
+    setError(null);
+    try {
+      const token = await getToken();
+      if (!token) throw new ApiError("Session expired.", 401);
+      const res = await listVenueStaff(token, venueId);
+      setRows(res.staff.map(staffToContact));
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not load contacts.",
+      );
+      setRows([]);
+    } finally {
+      setLoading(false);
     }
-    if (mockMode) {
-      const seeded = MOCK_VENUE_CONTACTS.map((c) => ({ ...c }));
-      setRows(seeded);
-      saveVenueContacts(venueId, seeded);
-      return;
-    }
-    setRows([]);
-  }, [venueId, mockMode]);
-
-  function persist(next: VenueContact[]) {
-    setRows(next);
-    saveVenueContacts(venueId, next);
   }
+
+  useEffect(() => {
+    if (mockMode) {
+      const stored = loadVenueContacts(venueId);
+      if (stored && stored.length > 0) {
+        setRows(stored.map(mockContactToRow));
+      } else {
+        const seeded = MOCK_VENUE_CONTACTS.map((c) => ({ ...c }));
+        saveVenueContacts(venueId, seeded);
+        setRows(seeded.map(mockContactToRow));
+      }
+      setLoading(false);
+      return;
+    }
+    void reloadLive();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [venueId, mockMode]);
 
   function resetForm() {
     setName("");
-    setPhone("");
     setEmail("");
-    setShiftStart("");
-    setShiftEnd("");
+    setStaffRole("STAFF");
   }
 
-  function onAdd(e: FormEvent) {
+  async function onAdd(e: FormEvent) {
     e.preventDefault();
     if (busy) return;
     const trimmedName = name.trim();
-    const trimmedPhone = phone.trim();
-    const digits = trimmedPhone.replace(/\D/g, "");
-    if (!trimmedName || !trimmedPhone || !shiftStart || !shiftEnd) {
-      setError("Name, mobile, and shift times are required.");
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedName || !trimmedEmail) {
+      setError("Name and email are required.");
       setOk(null);
       return;
     }
-    if (digits.length < 10) {
-      setError("Enter a valid mobile number.");
-      setOk(null);
-      return;
-    }
-    if (shiftStart >= shiftEnd) {
-      setError("Shift end must be after shift start.");
+    if (!trimmedEmail.includes("@")) {
+      setError("Enter a valid email.");
       setOk(null);
       return;
     }
     setError(null);
     setBusy(true);
-    const next: VenueContact[] = [
-      {
-        id: `c-${Date.now()}`,
+    try {
+      if (mockMode) {
+        const nextStored: VenueContact[] = [
+          {
+            id: `c-${Date.now()}`,
+            name: trimmedName,
+            phone: "",
+            email: trimmedEmail,
+            shiftStart: "18:00",
+            shiftEnd: "23:00",
+          },
+          ...(loadVenueContacts(venueId) ?? []),
+        ];
+        saveVenueContacts(venueId, nextStored);
+        setRows(nextStored.map(mockContactToRow));
+        setOk("Contact saved (demo — local only).");
+        resetForm();
+        return;
+      }
+      const token = await getToken();
+      if (!token) throw new ApiError("Session expired.", 401);
+      await assignVenueStaff(token, venueId, {
+        email: trimmedEmail,
         name: trimmedName,
-        phone: trimmedPhone,
-        email: email.trim(),
-        shiftStart,
-        shiftEnd,
-      },
-      ...rows,
-    ];
-    persist(next);
-    setOk("Contact saved.");
-    resetForm();
-    setBusy(false);
+        staffRole,
+      });
+      setOk("Contact added — they sign in with email OTP on the venue portal.");
+      resetForm();
+      await reloadLive();
+      onChanged?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not add contact.");
+      setOk(null);
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function onRemove(id: string) {
-    if (!window.confirm("Remove this contact?")) return;
-    persist(rows.filter((r) => r.id !== id));
-    setOk("Contact removed.");
+  async function onRemove(id: string) {
+    if (!window.confirm("Remove this contact from the venue?")) return;
+    setBusy(true);
     setError(null);
+    try {
+      if (mockMode) {
+        const next = (loadVenueContacts(venueId) ?? []).filter(
+          (c) => c.id !== id,
+        );
+        saveVenueContacts(venueId, next);
+        setRows(next.map(mockContactToRow));
+        setOk("Contact removed.");
+        return;
+      }
+      const token = await getToken();
+      if (!token) throw new ApiError("Session expired.", 401);
+      await removeVenueStaff(token, venueId, id);
+      setOk("Contact removed.");
+      await reloadLive();
+      onChanged?.();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not remove contact.",
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -1620,22 +1727,37 @@ function ContactsPanel({
         <div className="border-b border-border-subtle px-5 py-3.5">
           <h3 className="text-[15px] font-semibold text-ink">Contacts</h3>
           <p className="mt-1 text-[13px] text-text-muted">
-            {rows.length} contact{rows.length === 1 ? "" : "s"}
+            Venue portal access — {rows.length} contact
+            {rows.length === 1 ? "" : "s"}
+            {mockMode ? " · demo" : ""}
           </p>
         </div>
-        {rows.length === 0 ? (
+        {loading ? (
           <div className="px-5 py-10 text-center text-[14px] text-text-muted">
-            No contacts added yet.
+            Loading…
+          </div>
+        ) : error && rows.length === 0 ? (
+          <div className="space-y-3 px-5 py-8">
+            <ErrorBanner message={error} />
+            {!mockMode ? (
+              <Button type="button" onClick={() => void reloadLive()}>
+                Retry
+              </Button>
+            ) : null}
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="px-5 py-10 text-center text-[14px] text-text-muted">
+            No contacts yet — add someone with a work email.
           </div>
         ) : (
           <div className="nyto-table-wrap">
             <table className="nyto-table">
               <thead>
                 <tr>
-                  <th>Person name</th>
-                  <th>Shift</th>
-                  <th>Mobile</th>
+                  <th>Person</th>
+                  <th>Role</th>
                   <th>Email</th>
+                  <th>Mobile</th>
                   <th />
                 </tr>
               </thead>
@@ -1643,17 +1765,7 @@ function ContactsPanel({
                 {rows.map((c) => (
                   <tr key={c.id}>
                     <td className="font-medium text-ink">{c.name}</td>
-                    <td className="text-text-muted">
-                      {formatShiftRange(c.shiftStart, c.shiftEnd, false)}
-                    </td>
-                    <td>
-                      <a
-                        href={`tel:${c.phone.replace(/\s/g, "")}`}
-                        className="font-medium tabular-nums text-accent hover:underline"
-                      >
-                        {c.phone}
-                      </a>
-                    </td>
+                    <td className="text-text-muted">{roleLabel(c.staffRole)}</td>
                     <td className="text-text-muted">
                       {c.email ? (
                         <a
@@ -1666,11 +1778,24 @@ function ContactsPanel({
                         <span className="text-text-faint">—</span>
                       )}
                     </td>
+                    <td>
+                      {c.phone ? (
+                        <a
+                          href={`tel:${c.phone.replace(/\s/g, "")}`}
+                          className="font-medium tabular-nums text-accent hover:underline"
+                        >
+                          {c.phone}
+                        </a>
+                      ) : (
+                        <span className="text-text-faint">—</span>
+                      )}
+                    </td>
                     <td className="text-right">
                       <button
                         type="button"
-                        onClick={() => onRemove(c.id)}
-                        className="text-[13px] font-semibold text-danger hover:underline"
+                        disabled={busy}
+                        onClick={() => void onRemove(c.id)}
+                        className="text-[13px] font-semibold text-danger hover:underline disabled:opacity-50"
                       >
                         Remove
                       </button>
@@ -1683,8 +1808,12 @@ function ContactsPanel({
         )}
       </div>
 
-      <form onSubmit={onAdd} className="nyto-panel h-fit space-y-3.5 p-5">
+      <form onSubmit={(e) => void onAdd(e)} className="nyto-panel h-fit space-y-3.5 p-5">
         <h3 className="text-[15px] font-semibold text-ink">Add contact</h3>
+        <p className="text-[12px] leading-relaxed text-text-muted">
+          Grants venue-portal login. They sign in with email OTP — same as Team
+          invites for Admin.
+        </p>
         <div>
           <Label>Person name</Label>
           <Input
@@ -1694,51 +1823,30 @@ function ContactsPanel({
             required
           />
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label>Shift starts</Label>
-            <Input
-              type="time"
-              value={shiftStart}
-              onChange={(e) => setShiftStart(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <Label>Shift ends</Label>
-            <Input
-              type="time"
-              value={shiftEnd}
-              onChange={(e) => setShiftEnd(e.target.value)}
-              required
-            />
-          </div>
-        </div>
         <div>
-          <Label>Mobile number</Label>
-          <Input
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="+91 98765 43210"
-            required
-          />
-        </div>
-        <div>
-          <Label>
-            Email{" "}
-            <span className="font-normal text-text-faint">(optional)</span>
-          </Label>
+          <Label>Work email</Label>
           <Input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="venue@example.com"
+            required
           />
         </div>
-        <FieldError message={error} />
+        <div>
+          <Label>Role</Label>
+          <Select
+            value={staffRole}
+            onChange={(e) => setStaffRole(e.target.value as StaffRole)}
+          >
+            <option value="STAFF">Staff</option>
+            <option value="MANAGER">Manager</option>
+            <option value="OWNER">Owner</option>
+          </Select>
+        </div>
+        <FieldError message={error && rows.length > 0 ? error : null} />
         {ok ? <p className="text-[13px] font-medium text-success">{ok}</p> : null}
-        <Button type="submit" className="w-full" disabled={busy}>
+        <Button type="submit" className="w-full" disabled={busy || loading}>
           {busy ? "Saving…" : "Add contact"}
         </Button>
       </form>
