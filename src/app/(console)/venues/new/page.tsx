@@ -8,6 +8,7 @@ import { FieldError, Input, Label, Select } from "@/components/ui/Field";
 import { HostedByBadge } from "@/components/ui/HostedBy";
 import { ApiError } from "@/lib/api/client";
 import {
+  assignVenueStaff,
   createVenue,
   createVenueMenu,
   createVenueTable,
@@ -68,6 +69,9 @@ export default function NewVenuePage() {
     "ALL_INCLUSIVE" | "PAY_OWN_BILL"
   >("ALL_INCLUSIVE");
 
+  const [staffEmail, setStaffEmail] = useState("venue@nyto.app");
+  const [staffName, setStaffName] = useState("Venue Staff");
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -87,12 +91,61 @@ export default function NewVenuePage() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (busy || isVenueOrganized) return;
+    if (busy) return;
 
     if (!name.trim() || !address.trim() || !city.trim()) {
       setError("Venue name, address, and city are required.");
       return;
     }
+
+    if (isVenueOrganized) {
+      if (!staffEmail.trim()) {
+        setError("Staff email is required so the venue can sign in.");
+        return;
+      }
+
+      setError(null);
+      setBusy(true);
+      try {
+        if (mockMode) {
+          await new Promise((r) => setTimeout(r, 400));
+          saveVenueHostedBy("3", "PARTNER");
+          router.push("/venues/3");
+          return;
+        }
+
+        const token = await getToken();
+        if (!token) throw new ApiError("Session expired. Sign in again.", 401);
+
+        const venueRes = await createVenue(token, {
+          name: name.trim(),
+          address: address.trim(),
+          city: city.trim(),
+          area: area.trim() || undefined,
+          isActive: true,
+          hostedBy: "PARTNER",
+        });
+        const venueId = venueRes.venue.id;
+        saveVenueHostedBy(venueId, "PARTNER");
+
+        await assignVenueStaff(token, venueId, {
+          email: staffEmail.trim().toLowerCase(),
+          name: staffName.trim() || undefined,
+          staffRole: "OWNER",
+        });
+
+        router.push(`/venues/${venueId}?tab=contacts`);
+      } catch (err) {
+        setError(
+          err instanceof ApiError || err instanceof Error
+            ? err.message
+            : "Could not create venue.",
+        );
+        setBusy(false);
+      }
+      return;
+    }
+
     if (!experienceName.trim()) {
       setError("Experience name is required.");
       return;
@@ -191,8 +244,8 @@ export default function NewVenuePage() {
               Add venue
             </h1>
             <p className="mt-2.5 max-w-md text-[14px] text-text-muted">
-              Create a NYTO-organized venue, or open Requests & Approvals for
-              Venue-organized onboarding.
+              Create NYTO-organized or Venue-organized kitchens. Partner venues
+              get staff access; they publish their own nights.
             </p>
           </div>
           <Link href="/venues">
@@ -233,229 +286,261 @@ export default function NewVenuePage() {
         })}
       </div>
 
-      {isVenueOrganized ? (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.85fr)]">
-          <div className="nyto-panel space-y-5 p-6 sm:p-8">
-            <HostedByBadge value="PARTNER" />
-            <h2 className="font-display text-[24px] font-medium tracking-[-0.02em] text-ink">
-              Onboarding a Venue-organized venue?
-            </h2>
-            <p className="max-w-lg text-[14px] leading-relaxed text-text-muted">
-              The venue applies through Requests & Approvals. After approval, they
-              manage and publish their own dining nights. Admin monitors synced
-              inventory here and cannot create that venue from this form.
-            </p>
-            <div className="flex flex-wrap gap-3 pt-1">
-              <Link href="/host-applications">
-                <Button>Open Requests & Approvals</Button>
-              </Link>
-              <Link href="/venues">
-                <Button variant="secondary">Back to venues</Button>
-              </Link>
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
+        <form onSubmit={onSubmit} className="nyto-panel space-y-6 p-5 sm:p-7">
+          <section className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-[14px] font-semibold text-ink">Venue</h2>
+              <HostedByBadge value={path} short />
             </div>
-          </div>
-          <aside className="nyto-panel p-6 text-[13px] leading-relaxed text-text-muted">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-faint">
-              Flow
-            </p>
-            <ol className="mt-4 list-decimal space-y-3 pl-4">
-              <li>Venue submits a host application</li>
-              <li>Admin reviews and approves</li>
-              <li>Venue publishes nights — inventory syncs here view-only</li>
-            </ol>
-          </aside>
-        </div>
-      ) : (
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
-          <form onSubmit={onSubmit} className="nyto-panel space-y-6 p-5 sm:p-7">
-            <section className="space-y-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-[14px] font-semibold text-ink">Venue</h2>
-                <HostedByBadge value="NYTO" short />
-              </div>
+            <div>
+              <Label>Venue name</Label>
+              <Input
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="SkyGarden Madhapur"
+                autoFocus
+              />
+            </div>
+            <div>
+              <Label>Address</Label>
+              <Input
+                required
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="Street / landmark"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Venue name</Label>
+                <Label>City</Label>
                 <Input
                   required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="SkyGarden Madhapur"
-                  autoFocus
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
                 />
               </div>
               <div>
-                <Label>Address</Label>
+                <Label>Area</Label>
                 <Input
-                  required
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Street / landmark"
+                  value={area}
+                  onChange={(e) => setArea(e.target.value)}
+                  placeholder="Madhapur"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+            </div>
+          </section>
+
+          {isVenueOrganized ? (
+            <>
+              <div className="h-px bg-border-subtle" />
+              <section className="space-y-4">
                 <div>
-                  <Label>City</Label>
+                  <h2 className="text-[14px] font-semibold text-ink">
+                    Venue staff access
+                  </h2>
+                  <p className="mt-1 text-[12px] text-text-faint">
+                    They sign into the Venue portal with this email, then publish
+                    menus and nights. Admin watches inventory view-only.
+                  </p>
+                </div>
+                <div>
+                  <Label>Staff email</Label>
                   <Input
                     required
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
+                    type="email"
+                    value={staffEmail}
+                    onChange={(e) => setStaffEmail(e.target.value)}
+                    placeholder="venue@nyto.app"
                   />
                 </div>
                 <div>
-                  <Label>Area</Label>
+                  <Label>Staff name</Label>
                   <Input
-                    value={area}
-                    onChange={(e) => setArea(e.target.value)}
-                    placeholder="Madhapur"
+                    value={staffName}
+                    onChange={(e) => setStaffName(e.target.value)}
+                    placeholder="Kitchen lead"
                   />
                 </div>
-              </div>
-            </section>
-
-            <div className="h-px bg-border-subtle" />
-
-            <section className="space-y-4">
-              <div>
-                <h2 className="text-[14px] font-semibold text-ink">
-                  First dining night
-                </h2>
-                <p className="mt-1 text-[12px] text-text-faint">
-                  Price and capacity apply to this NYTO-organized night only.
+                <p className="text-[12px] text-text-muted">
+                  Incoming applications still land in{" "}
+                  <Link
+                    href="/host-applications"
+                    className="font-semibold text-accent-soft underline-offset-2 hover:underline"
+                  >
+                    Requests & Approvals
+                  </Link>
+                  .
                 </p>
-              </div>
-              <div>
-                <Label>Experience name</Label>
-                <Input
-                  required
-                  value={experienceName}
-                  onChange={(e) => setExperienceName(e.target.value)}
-                  placeholder="3-course dinner"
-                />
-              </div>
-              <div>
-                <Label>Category</Label>
-                <div className="mt-1.5 flex flex-wrap gap-2">
-                  {EXPERIENCE_CATEGORIES.map((c) => {
-                    const on = categories.includes(c.id);
-                    return (
-                      <button
-                        key={c.id}
-                        type="button"
-                        title={c.hint}
-                        onClick={() =>
-                          setCategories((prev) => toggleCategory(prev, c.id))
-                        }
-                        className={`rounded-lg border px-3 py-1.5 text-[12px] font-semibold transition ${
-                          on
-                            ? "border-accent bg-[var(--accent-wash)] text-accent-soft"
-                            : "border-border bg-bg-elevated text-text-muted hover:text-text"
-                        }`}
-                      >
-                        {c.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+              </section>
+            </>
+          ) : (
+            <>
+              <div className="h-px bg-border-subtle" />
+              <section className="space-y-4">
                 <div>
-                  <Label>Dietary option</Label>
+                  <h2 className="text-[14px] font-semibold text-ink">
+                    First dining night
+                  </h2>
+                  <p className="mt-1 text-[12px] text-text-faint">
+                    Price and capacity apply to this NYTO-organized night only.
+                  </p>
+                </div>
+                <div>
+                  <Label>Experience name</Label>
+                  <Input
+                    required
+                    value={experienceName}
+                    onChange={(e) => setExperienceName(e.target.value)}
+                    placeholder="3-course dinner"
+                  />
+                </div>
+                <div>
+                  <Label>Category</Label>
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                    {EXPERIENCE_CATEGORIES.map((c) => {
+                      const on = categories.includes(c.id);
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          title={c.hint}
+                          onClick={() =>
+                            setCategories((prev) => toggleCategory(prev, c.id))
+                          }
+                          className={`rounded-lg border px-3 py-1.5 text-[12px] font-semibold transition ${
+                            on
+                              ? "border-accent bg-[var(--accent-wash)] text-accent-soft"
+                              : "border-border bg-bg-elevated text-text-muted hover:text-text"
+                          }`}
+                        >
+                          {c.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Dietary option</Label>
+                    <Select
+                      value={diet}
+                      onChange={(e) =>
+                        setDiet(
+                          e.target.value as
+                            | "VEGETARIAN"
+                            | "NON_VEGETARIAN"
+                            | "VEGAN",
+                        )
+                      }
+                    >
+                      <option value="NON_VEGETARIAN">Non-vegetarian</option>
+                      <option value="VEGETARIAN">Vegetarian</option>
+                      <option value="VEGAN">Vegan</option>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Seat price (₹)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      required
+                      placeholder="For this night"
+                      value={seatPrice}
+                      onChange={(e) => setSeatPrice(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Start date/time</Label>
+                    <Input
+                      type="datetime-local"
+                      required
+                      value={startsAt}
+                      onChange={(e) => setStartsAt(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label>Capacity</Label>
+                    <Input
+                      type="number"
+                      min={2}
+                      max={12}
+                      required
+                      placeholder="Seats"
+                      value={capacity}
+                      onChange={(e) => setCapacity(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label>Bill type</Label>
                   <Select
-                    value={diet}
+                    value={paymentType}
                     onChange={(e) =>
-                      setDiet(
-                        e.target.value as
-                          | "VEGETARIAN"
-                          | "NON_VEGETARIAN"
-                          | "VEGAN",
+                      setPaymentType(
+                        e.target.value as "ALL_INCLUSIVE" | "PAY_OWN_BILL",
                       )
                     }
                   >
-                    <option value="NON_VEGETARIAN">Non-vegetarian</option>
-                    <option value="VEGETARIAN">Vegetarian</option>
-                    <option value="VEGAN">Vegan</option>
+                    <option value="ALL_INCLUSIVE">All-inclusive</option>
+                    <option value="PAY_OWN_BILL">Pay as you go</option>
                   </Select>
                 </div>
-                <div>
-                  <Label>Seat price (₹)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    required
-                    placeholder="For this night"
-                    value={seatPrice}
-                    onChange={(e) => setSeatPrice(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Start date/time</Label>
-                  <Input
-                    type="datetime-local"
-                    required
-                    value={startsAt}
-                    onChange={(e) => setStartsAt(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label>Capacity</Label>
-                  <Input
-                    type="number"
-                    min={2}
-                    max={12}
-                    required
-                    placeholder="Seats"
-                    value={capacity}
-                    onChange={(e) => setCapacity(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div>
-                <Label>Bill type</Label>
-                <Select
-                  value={paymentType}
-                  onChange={(e) =>
-                    setPaymentType(
-                      e.target.value as "ALL_INCLUSIVE" | "PAY_OWN_BILL",
-                    )
-                  }
-                >
-                  <option value="ALL_INCLUSIVE">All-inclusive</option>
-                  <option value="PAY_OWN_BILL">Pay as you go</option>
-                </Select>
-              </div>
-            </section>
+              </section>
+            </>
+          )}
 
-            <FieldError message={error} />
+          <FieldError message={error} />
 
-            <Button type="submit" disabled={busy} className="w-full sm:w-auto">
-              {busy ? "Publishing…" : "Create venue and publish dining night"}
-            </Button>
-          </form>
+          <Button type="submit" disabled={busy} className="w-full sm:w-auto">
+            {busy
+              ? isVenueOrganized
+                ? "Creating…"
+                : "Publishing…"
+              : isVenueOrganized
+                ? "Create venue-organized venue"
+                : "Create venue and publish dining night"}
+          </Button>
+        </form>
 
-          <aside className="nyto-panel relative overflow-hidden p-6 sm:sticky sm:top-8 sm:p-7">
-            <div
-              className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full opacity-50"
-              style={{
-                background:
-                  "radial-gradient(circle, rgba(77,139,255,0.28), transparent 70%)",
-              }}
-              aria-hidden
-            />
-            <p className="relative text-[11px] font-semibold uppercase tracking-[0.14em] text-text-faint">
-              Preview
-            </p>
-            <div className="relative mt-6 space-y-4">
-              <HostedByBadge value="NYTO" />
-              <div>
-                <h2 className="font-display text-[26px] font-medium leading-tight tracking-[-0.03em] text-ink">
-                  {previewName}
-                </h2>
-                <p className="mt-1.5 text-[14px] text-text-muted">
-                  {previewPlace}
+        <aside className="nyto-panel relative overflow-hidden p-6 sm:sticky sm:top-8 sm:p-7">
+          <div
+            className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full opacity-50"
+            style={{
+              background:
+                "radial-gradient(circle, rgba(77,139,255,0.28), transparent 70%)",
+            }}
+            aria-hidden
+          />
+          <p className="relative text-[11px] font-semibold uppercase tracking-[0.14em] text-text-faint">
+            Preview
+          </p>
+          <div className="relative mt-6 space-y-4">
+            <HostedByBadge value={path} />
+            <div>
+              <h2 className="font-display text-[26px] font-medium leading-tight tracking-[-0.03em] text-ink">
+                {previewName}
+              </h2>
+              <p className="mt-1.5 text-[14px] text-text-muted">
+                {previewPlace}
+              </p>
+            </div>
+            {isVenueOrganized ? (
+              <div className="space-y-2 rounded-xl border border-border-subtle bg-bg-soft/80 px-4 py-3.5">
+                <p className="text-[13px] font-semibold text-ink">
+                  Staff portal access
+                </p>
+                <p className="text-[12px] text-text-muted">
+                  {staffEmail.trim() || "staff@venue.com"}
+                </p>
+                <p className="text-[12px] text-text-faint">
+                  Menus and nights are published by the venue — not from Admin.
                 </p>
               </div>
+            ) : (
               <div className="space-y-2 rounded-xl border border-border-subtle bg-bg-soft/80 px-4 py-3.5">
                 <p className="text-[13px] font-semibold text-ink">
                   {experienceName.trim() || "Experience"}
@@ -478,13 +563,13 @@ export default function NewVenuePage() {
                   {previewStartLabel(startsAt)}
                 </p>
               </div>
-              <p className="text-[11px] text-text-faint">
-                {hostedByLabel("NYTO")} · illustrative only until you submit.
-              </p>
-            </div>
-          </aside>
-        </div>
-      )}
+            )}
+            <p className="text-[11px] text-text-faint">
+              {hostedByLabel(path)} · illustrative only until you submit.
+            </p>
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }

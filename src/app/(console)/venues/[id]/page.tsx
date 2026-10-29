@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { Badge, statusTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { FieldError, Input, Label, Select } from "@/components/ui/Field";
@@ -85,9 +85,15 @@ type Tab = "overview" | "experiences" | "contacts";
 
 export default function VenueDetailPage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const venueId = params.id;
   const { mockMode, getToken } = useAuth();
-  const [tab, setTab] = useState<Tab>("overview");
+  const initialTab = searchParams.get("tab");
+  const [tab, setTab] = useState<Tab>(
+    initialTab === "contacts" || initialTab === "experiences"
+      ? initialTab
+      : "overview",
+  );
   const [toggling, setToggling] = useState(false);
   const [toggleError, setToggleError] = useState<string | null>(null);
   const [localHostedBy, setLocalHostedBy] = useState<HostedBy | null>(null);
