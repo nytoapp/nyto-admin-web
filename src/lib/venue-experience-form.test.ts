@@ -6,6 +6,7 @@ import {
   experienceEditFormValues,
   isUpcomingDiningNight,
   kolkataDatetimeLocalToIso,
+  priceTierFromKolkataWallClock,
   mapTableToNightExperience,
   nightCapacityLabel,
   parseDietaryType,
@@ -61,6 +62,12 @@ describe("toDatetimeLocalInKolkata / kolkataDatetimeLocalToIso", () => {
     const local = "2026-12-20T13:00";
     const iso = kolkataDatetimeLocalToIso(local);
     expect(toDatetimeLocalInKolkata(iso)).toBe(local);
+    expect(iso).toBe("2026-12-20T07:30:00.000Z");
+  });
+
+  it("reads lunch and dinner from the IST hour, not the laptop clock", () => {
+    expect(priceTierFromKolkataWallClock("2026-12-20T13:00")).toBe("DAYTIME");
+    expect(priceTierFromKolkataWallClock("2026-12-20T20:00")).toBe("EVENING");
   });
 
   it("returns empty string for missing or invalid timestamps", () => {
