@@ -67,6 +67,17 @@ export function toDatetimeLocalInKolkata(
   return `${get("year")}-${get("month")}-${get("day")}T${hour}:${get("minute")}`;
 }
 
+/** Hour in a datetime-local value is the IST wall clock the operator typed. */
+export function priceTierFromKolkataWallClock(
+  local: string,
+): "DAYTIME" | "EVENING" {
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/.exec(local.trim());
+  if (!match) return "EVENING";
+  const hour = Number(match[2]);
+  if (!Number.isFinite(hour)) return "EVENING";
+  return hour < 16 ? "DAYTIME" : "EVENING";
+}
+
 /**
  * Interpret a `datetime-local` value as Asia/Kolkata wall time → UTC ISO.
  */

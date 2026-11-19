@@ -276,7 +276,8 @@ export default function HostApplicationsPage() {
 
   async function onReject(id: string) {
     if (busyId) return;
-    const reason = window.prompt("Optional reject reason") ?? "";
+    const reason = window.prompt("Optional reject reason");
+    if (reason === null) return;
     setBusyId(id);
     setActionError(null);
     try {

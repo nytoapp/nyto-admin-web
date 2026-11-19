@@ -22,15 +22,21 @@ import {
 import type { HostedBy } from "@/lib/hosted-by";
 import { hostedByLabel } from "@/lib/hosted-by";
 import {
-  priceTierFromLocalDatetime,
-  toIsoFromLocalDatetime,
-} from "@/lib/mappers";
+  kolkataDatetimeLocalToIso,
+  priceTierFromKolkataWallClock,
+} from "@/lib/venue-experience-form";
 import { saveVenueHostedBy } from "@/lib/venue-meta";
 import { useAuth } from "@/providers/auth-provider";
 
 function previewStartLabel(startsAt: string): string {
   if (!startsAt) return "Start time not set";
-  const d = new Date(startsAt);
+  let iso: string;
+  try {
+    iso = kolkataDatetimeLocalToIso(startsAt);
+  } catch {
+    return "Start time not set";
+  }
+  const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "Start time not set";
   return d
     .toLocaleString("en-GB", {
@@ -158,8 +164,14 @@ export default function NewVenuePage() {
       setError("Pick a start time for the first night.");
       return;
     }
-    const startMs = new Date(startsAt).getTime();
-    if (Number.isNaN(startMs) || startMs <= Date.now()) {
+    let startsAtIso: string;
+    try {
+      startsAtIso = kolkataDatetimeLocalToIso(startsAt);
+    } catch {
+      setError("Start time is invalid.");
+      return;
+    }
+    if (new Date(startsAtIso).getTime() <= Date.now()) {
       setError("Start time must be in the future.");
       return;
     }
@@ -205,10 +217,10 @@ export default function NewVenuePage() {
       });
 
       await createVenueTable(token, venueId, {
-        startsAt: toIsoFromLocalDatetime(startsAt),
+        startsAt: startsAtIso,
         seatPrice: price,
         capacity: seats,
-        priceTier: priceTierFromLocalDatetime(startsAt),
+        priceTier: priceTierFromKolkataWallClock(startsAt),
         tableType: categories[0],
         paymentType,
         menuId: menuRes.menu.id,
